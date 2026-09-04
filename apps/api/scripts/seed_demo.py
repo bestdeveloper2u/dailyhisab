@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 from app.core.security import hash_password, verify_password
+from app.models.budget import Budget
+from app.models.debt import Debt
 from app.models.expense import Expense
 from app.models.profile import DEMO_USER_NAME, Profile
 
@@ -32,6 +34,24 @@ DEMO_PASSWORD = "demo1234"
 # Deterministic ids so repeated seeds across environments line up.
 DEMO_ID = uuid.uuid5(uuid.NAMESPACE_URL, "khoroch:demo-user")
 NS_EXPENSE = uuid.NAMESPACE_URL
+NS_DEBT = uuid.NAMESPACE_URL
+
+# Open demo debts (settled_at NULL): fixed uuid5 ids + check-before-insert so
+# re-running the seed never duplicates. (party, dir, amt, days_ago, note)
+DEMO_DEBTS: list[tuple[str, str, str, int, str | None]] = [
+    ("রফিক", "lend", "2000.00", 7, "এমারজেন্সিতে ধার দিয়েছি"),
+    ("করিম চাচা", "borrow", "5000.00", 12, "বাসা ভাড়ার অগ্রিম"),
+    ("অফিস ক্যান্টিন", "borrow", "1000.00", 3, None),
+]
+
+# Demo monthly budget for the dashboard's budget card.
+DEMO_BUDGET_TOTAL = "25000.00"
+DEMO_BUDGET_CATS: dict[str, str] = {
+    "কাঁচাবাজার": "8000.00",
+    "বাসা ভাড়া": "8000.00",
+    "রিকশা": "2000.00",
+    "বিজলি বিল": "1500.00",
+}
 
 # (days_ago, cat, grp, amt, pay, desc) — ~14 rows across current + last month.
 DEMO_EXPENSES: list[tuple[int, str, str, str, str, str | None]] = [
@@ -111,6 +131,47 @@ def main() -> None:
         session.add_all(fresh)
         session.commit()
         print(f"seeded {len(fresh)} demo expenses for {profile.id}")
+
+        # Debts: check-before-insert on the deterministic uuid5 ids, so
+        # re-running the seed never duplicates (and never resurrects a debt
+        # the demo user paid off or deleted).
+        created_debts = 0
+        today = datetime.now(UTC).date()
+        for party, direction, amt, days_ago, note in DEMO_DEBTS:
+            debt_id = uuid.uuid5(NS_DEBT, f"khoroch:demo-debt:{party}")
+            if session.get(Debt, debt_id) is not None:
+                continue
+            session.add(
+                Debt(
+                    id=debt_id,
+                    user_id=profile.id,
+                    party=party,
+                    dir=direction,
+                    amt=Decimal(amt),
+                    note=note,
+                    iso=today - timedelta(days=days_ago),
+                )
+            )
+            created_debts += 1
+        session.commit()
+        print(
+            f"seeded {created_debts} new demo debts "
+            f"({len(DEMO_DEBTS) - created_debts} already present)"
+        )
+
+        # Budget: upsert by PK (user_id) — a rerun refreshes the demo values
+        # instead of duplicating.
+        budget = session.get(Budget, profile.id)
+        if budget is None:
+            budget = Budget(user_id=profile.id)
+            session.add(budget)
+            action = "seeded demo budget"
+        else:
+            action = "refreshed demo budget"
+        budget.total = Decimal(DEMO_BUDGET_TOTAL)
+        budget.cats = dict(DEMO_BUDGET_CATS)
+        session.commit()
+        print(f"{action} for {profile.id}")
     engine.dispose()
 
 

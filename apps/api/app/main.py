@@ -3,7 +3,9 @@
 Phase 1: health + auth (register/login/refresh/logout/me, rotating refresh
 tokens per ADR-0002). Phase 2: expenses CRUD + bulk (keyset cursor
 pagination), rule-based Bengali voice parsing, and cached monthly/yearly
-reports. Run locally: uv run uvicorn app.main:app --reload
+reports. Phase 3: debts CRUD + pay close-out (PARTIAL/FULL), monthly
+budgets with spend/usage breakdown, and CSV export. Run locally:
+uv run uvicorn app.main:app --reload
 """
 
 import logging
@@ -16,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.kv import close_kv
 from app.db.session import dispose_engine
-from app.routers import auth, expenses, health, reports, voice
+from app.routers import auth, budgets, debts, expenses, export, health, reports, voice
 
 logger = logging.getLogger("khoroch.api")
 
@@ -52,8 +54,11 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(expenses.router, prefix="/api/v1")
+    app.include_router(debts.router, prefix="/api/v1")
+    app.include_router(budgets.router, prefix="/api/v1")
     app.include_router(voice.router, prefix="/api/v1")
     app.include_router(reports.router, prefix="/api/v1")
+    app.include_router(export.router, prefix="/api/v1")
     # ... plus a root-level /healthz for load balancers (same handler).
     app.include_router(health.router)
     return app

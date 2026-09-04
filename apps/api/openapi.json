@@ -24,6 +24,119 @@
         "title": "AuthOut",
         "type": "object"
       },
+      "BudgetCatUsage": {
+        "description": "Per-category budget vs actual spend for one month.",
+        "properties": {
+          "budget": {
+            "title": "Budget",
+            "type": "string"
+          },
+          "spent": {
+            "title": "Spent",
+            "type": "string"
+          },
+          "usage_pct": {
+            "title": "Usage Pct",
+            "type": "number"
+          }
+        },
+        "required": [
+          "budget",
+          "spent",
+          "usage_pct"
+        ],
+        "title": "BudgetCatUsage",
+        "type": "object"
+      },
+      "BudgetIn": {
+        "description": "PUT /budgets body \u2014 both fields optional (partial upsert).",
+        "properties": {
+          "cats": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "examples": [
+                    "8000.00"
+                  ],
+                  "pattern": "^\\d{1,10}\\.\\d{2}$",
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "maxLength": 80,
+                  "minLength": 1
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cats"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "examples": [
+                  "890.00"
+                ],
+                "pattern": "^\\d{1,10}\\.\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "title": "BudgetIn",
+        "type": "object"
+      },
+      "BudgetOut": {
+        "description": "GET /budgets body: stored budget merged with that month's spending.",
+        "properties": {
+          "by_cat": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BudgetCatUsage"
+            },
+            "title": "By Cat",
+            "type": "object"
+          },
+          "cats": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Cats",
+            "type": "object"
+          },
+          "spent": {
+            "title": "Spent",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          },
+          "usage_pct": {
+            "title": "Usage Pct",
+            "type": "number"
+          },
+          "ym": {
+            "title": "Ym",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ym",
+          "total",
+          "cats",
+          "spent",
+          "usage_pct",
+          "by_cat"
+        ],
+        "title": "BudgetOut",
+        "type": "object"
+      },
       "BulkExpensesIn": {
         "description": "POST /expenses/bulk body (voice multi-item inserts).",
         "properties": {
@@ -57,6 +170,278 @@
           "items"
         ],
         "title": "BulkExpensesOut",
+        "type": "object"
+      },
+      "DebtIn": {
+        "description": "POST /debts body. ``iso`` defaults to today (router fills it).",
+        "properties": {
+          "amt": {
+            "examples": [
+              "890.00"
+            ],
+            "pattern": "^\\d{1,10}\\.\\d{2}$",
+            "title": "Amt",
+            "type": "string"
+          },
+          "dir": {
+            "enum": [
+              "lend",
+              "borrow"
+            ],
+            "title": "Dir",
+            "type": "string"
+          },
+          "iso": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "party": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Party",
+            "type": "string"
+          }
+        },
+        "required": [
+          "party",
+          "dir",
+          "amt"
+        ],
+        "title": "DebtIn",
+        "type": "object"
+      },
+      "DebtListOut": {
+        "description": "Envelope for GET /debts (ADR-0004 \u00a78).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DebtOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "DebtListOut",
+        "type": "object"
+      },
+      "DebtOut": {
+        "description": "Public debt row; keys mirror the DB columns exactly.",
+        "properties": {
+          "amt": {
+            "title": "Amt",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "dir": {
+            "enum": [
+              "lend",
+              "borrow"
+            ],
+            "title": "Dir",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "iso": {
+            "format": "date",
+            "title": "Iso",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "party": {
+            "title": "Party",
+            "type": "string"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "party",
+          "dir",
+          "amt",
+          "iso",
+          "created_at"
+        ],
+        "title": "DebtOut",
+        "type": "object"
+      },
+      "DebtPayIn": {
+        "description": "POST /debts/{id}/pay body \u2014 the amount being paid back.",
+        "properties": {
+          "amt": {
+            "examples": [
+              "890.00"
+            ],
+            "pattern": "^\\d{1,10}\\.\\d{2}$",
+            "title": "Amt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amt"
+        ],
+        "title": "DebtPayIn",
+        "type": "object"
+      },
+      "DebtPayOut": {
+        "description": "Pay close-out result: FULL settles the debt, PARTIAL reduces it.",
+        "properties": {
+          "debt": {
+            "$ref": "#/components/schemas/DebtOut"
+          },
+          "status": {
+            "enum": [
+              "FULL",
+              "PARTIAL"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "debt"
+        ],
+        "title": "DebtPayOut",
+        "type": "object"
+      },
+      "DebtUpdate": {
+        "description": "PATCH /debts/{id} body \u2014 every field optional (partial update).",
+        "properties": {
+          "amt": {
+            "anyOf": [
+              {
+                "examples": [
+                  "890.00"
+                ],
+                "pattern": "^\\d{1,10}\\.\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amt"
+          },
+          "dir": {
+            "anyOf": [
+              {
+                "enum": [
+                  "lend",
+                  "borrow"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dir"
+          },
+          "iso": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "party": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Party"
+          }
+        },
+        "title": "DebtUpdate",
         "type": "object"
       },
       "ExpenseIn": {
@@ -940,6 +1325,391 @@
         ]
       }
     },
+    "/api/v1/budgets": {
+      "get": {
+        "description": "Budget vs spend for one month (``?ym=YYYY-MM``, default: current).",
+        "operationId": "get_budgets_api_v1_budgets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ym",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ym"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Budgets",
+        "tags": [
+          "budgets"
+        ]
+      },
+      "put": {
+        "description": "Upsert the caller's budget; returns the GET view for the current month.",
+        "operationId": "put_budgets_api_v1_budgets_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Budgets",
+        "tags": [
+          "budgets"
+        ]
+      }
+    },
+    "/api/v1/debts": {
+      "get": {
+        "description": "List the caller's debts, newest first, keyset-paginated.\n\n``?status=open`` (default) keeps rows with ``settled_at IS NULL``;\n``settled`` the complement; ``all`` both.",
+        "operationId": "list_debts_api_v1_debts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "open",
+              "enum": [
+                "open",
+                "settled",
+                "all"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Debts",
+        "tags": [
+          "debts"
+        ]
+      },
+      "post": {
+        "description": "Record one debt (201 with the stored row; ``iso`` defaults to today).",
+        "operationId": "create_debt_api_v1_debts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Debt",
+        "tags": [
+          "debts"
+        ]
+      }
+    },
+    "/api/v1/debts/{debt_id}": {
+      "delete": {
+        "description": "Delete the caller's debt (204; unknown/foreign id \u2192 404).",
+        "operationId": "delete_debt_api_v1_debts__debt_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Debt",
+        "tags": [
+          "debts"
+        ]
+      },
+      "patch": {
+        "description": "Partially update the caller's debt (omitted fields stay as-is).",
+        "operationId": "update_debt_api_v1_debts__debt_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Debt",
+        "tags": [
+          "debts"
+        ]
+      }
+    },
+    "/api/v1/debts/{debt_id}/pay": {
+      "post": {
+        "description": "Close out a debt with a payment.\n\n``amt >= debt.amt`` \u2192 FULL: the debt settles (``settled_at`` = now UTC,\nthe stored amount is left untouched \u2014 overpay is not recorded).\n``0 < amt < debt.amt`` \u2192 PARTIAL: the remaining amount shrinks.\nPaying an already-settled debt \u2192 409 ``debt_already_settled``.",
+        "operationId": "pay_debt_api_v1_debts__debt_id__pay_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "debt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Debt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtPayIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebtPayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Pay Debt",
+        "tags": [
+          "debts"
+        ]
+      }
+    },
     "/api/v1/expenses": {
       "get": {
         "description": "List the caller's expenses, newest first, keyset-paginated.",
@@ -1247,6 +2017,77 @@
         "summary": "Update Expense",
         "tags": [
           "expenses"
+        ]
+      }
+    },
+    "/api/v1/export/expenses.csv": {
+      "get": {
+        "description": "Stream the caller's expenses as a Bengali-friendly CSV attachment.",
+        "operationId": "export_expenses_csv_api_v1_export_expenses_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Expenses Csv",
+        "tags": [
+          "export"
         ]
       }
     },

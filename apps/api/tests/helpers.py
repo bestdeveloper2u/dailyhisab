@@ -28,3 +28,14 @@ def expense_body(**overrides: object) -> dict[str, object]:
     }
     body.update(overrides)
     return body
+
+
+def debt_body(**overrides: object) -> dict[str, object]:
+    """Minimal valid POST /debts payload with overrides applied."""
+    body: dict[str, object] = {
+        "party": "রফিক",
+        "dir": "lend",
+        "amt": "2000.00",
+    }
+    body.update(overrides)
+    return body
