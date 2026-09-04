@@ -19,7 +19,7 @@ segment yields at most one expense candidate:
 """
 
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -27,7 +27,13 @@ from fastapi import APIRouter, Depends
 
 from app.core.deps import get_current_user
 from app.models.profile import Profile
-from app.schemas.expense import ParsedItem, VoiceParseIn, VoiceParseOut
+from app.schemas.expense import (
+    ExpenseGroup,
+    ParsedItem,
+    PayMethod,
+    VoiceParseIn,
+    VoiceParseOut,
+)
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -38,7 +44,9 @@ CurrentUser = Annotated[Profile, Depends(get_current_user)]
 _BN_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
 # Danda, quotes and other punctuation become spaces; '.' is kept (decimals).
 _PUNCT = re.compile(r"[।!?'\"()\-\u2013\u2014]+")
-_WS = re.compile(r"\s+")
+# Horizontal whitespace collapses; newlines survive — they are multi-item
+# separators (see _SEG_SPLIT) and must reach the split intact.
+_WS = re.compile(r"[^\S\n]+")
 
 # Multi-item separators (a Bengali conjunction needs surrounding spaces so
 # words like ওয়াইফাই are never split).
@@ -82,7 +90,7 @@ _THOUSAND_WORD = "হাজার"
 
 # Ordered category keywords: first substring hit wins, so specific phrases
 # and longer words must precede their generic substrings.
-_KEYWORDS: list[tuple[str, str]] = [
+_KEYWORDS: list[tuple[str, ExpenseGroup]] = [
     # transport — "ভাড়া টাকা" (fare money) before housing's ভাড়া
     ("ভাড়া টাকা", "transport"),
     ("রিকশা", "transport"),
@@ -139,7 +147,7 @@ _KEYWORDS: list[tuple[str, str]] = [
     ("shoe", "personal"),
 ]
 
-_PAY_KEYWORDS: list[tuple[str, str]] = [
+_PAY_KEYWORDS: list[tuple[str, PayMethod]] = [
     ("বিকাশ", "bkash"),
     ("bkash", "bkash"),
     ("নগদ", "nagad"),
@@ -203,7 +211,7 @@ def _strip_amount_text(seg: str) -> str:
     return _WS.sub(" ", cleaned)
 
 
-def _match_category(seg: str) -> tuple[str, str]:
+def _match_category(seg: str) -> tuple[str, ExpenseGroup]:
     """First keyword hit → ``(cat, grp)``; otherwise ``("other", "other")``."""
     for keyword, grp in _KEYWORDS:
         if keyword in seg:
@@ -211,7 +219,7 @@ def _match_category(seg: str) -> tuple[str, str]:
     return "other", "other"
 
 
-def _match_pay(seg: str) -> str | None:
+def _match_pay(seg: str) -> PayMethod | None:
     for keyword, pay in _PAY_KEYWORDS:
         if keyword in seg:
             return pay
@@ -248,7 +256,7 @@ def _parse_segment(seg: str, today: date) -> tuple[ParsedItem, float] | None:
 @router.post("/parse", response_model=VoiceParseOut)
 async def parse_transcript(body: VoiceParseIn, user: CurrentUser) -> VoiceParseOut:
     """Rule-parse a Bengali voice transcript into expense candidates."""
-    today = date.today()
+    today = datetime.now(UTC).date()
     items: list[ParsedItem] = []
     confidences: list[float] = []
     for seg in _SEG_SPLIT.split(_normalize(body.text)):

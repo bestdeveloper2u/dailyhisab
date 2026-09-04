@@ -83,7 +83,7 @@ async def _invalidate_reports(kv: KV, user_id: uuid.UUID | str, dates: Iterable[
 
 
 def _encode_cursor(expense: Expense) -> str:
-    raw = f"{expense.iso.isoformat()}|{expense.id}".encode("utf-8")
+    raw = f"{expense.iso.isoformat()}|{expense.id}".encode()
     return base64.urlsafe_b64encode(raw).decode("ascii")
 
 

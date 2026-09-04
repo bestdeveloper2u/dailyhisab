@@ -13,7 +13,7 @@ touch, so a cache never outlives the data it summarizes.
 import calendar
 import json
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -28,8 +28,6 @@ from app.models.expense import Expense
 from app.models.profile import Profile
 from app.schemas.expense import (
     MonthlyReportOut,
-    ReportByDay,
-    ReportByMonth,
     YearlyReportOut,
 )
 
@@ -40,7 +38,7 @@ KvDep = Annotated[KV, Depends(get_kv_dep)]
 CurrentUser = Annotated[Profile, Depends(get_current_user)]
 
 CACHE_TTL_SECONDS = 300
-_ZERO = Decimal("0")
+_ZERO = Decimal(0)
 _TWO_PLACES = Decimal("0.01")
 
 _BAD_YM = {
@@ -62,11 +60,11 @@ def _money(value: Decimal) -> str:
 def _parse_ym(ym: str | None) -> tuple[str, date, date]:
     """Normalize ``?ym=`` to (``YYYY-MM``, first day, last day); 400 on junk."""
     if ym is None:
-        today = date.today()
+        today = datetime.now(UTC).date()
         year, month = today.year, today.month
     else:
         try:
-            parsed = datetime.strptime(ym, "%Y-%m").date()
+            parsed = date.fromisoformat(f"{ym}-01")
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=_BAD_YM
@@ -80,7 +78,7 @@ def _parse_ym(ym: str | None) -> tuple[str, date, date]:
 
 def _parse_year(year: str | None) -> int:
     if year is None:
-        return date.today().year
+        return datetime.now(UTC).date().year
     try:
         parsed = int(year)
         if not 1 <= parsed <= 9999:

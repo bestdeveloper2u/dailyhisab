@@ -24,6 +24,320 @@
         "title": "AuthOut",
         "type": "object"
       },
+      "BulkExpensesIn": {
+        "description": "POST /expenses/bulk body (voice multi-item inserts).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenseIn"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BulkExpensesIn",
+        "type": "object"
+      },
+      "BulkExpensesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenseOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BulkExpensesOut",
+        "type": "object"
+      },
+      "ExpenseIn": {
+        "description": "POST /expenses and POST /expenses/bulk item body.",
+        "properties": {
+          "amt": {
+            "examples": [
+              "890.00"
+            ],
+            "pattern": "^\\d{1,10}\\.\\d{2}$",
+            "title": "Amt",
+            "type": "string"
+          },
+          "cat": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Cat",
+            "type": "string"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "grp": {
+            "enum": [
+              "food",
+              "housing",
+              "utility",
+              "transport",
+              "health",
+              "education",
+              "personal",
+              "other"
+            ],
+            "title": "Grp",
+            "type": "string"
+          },
+          "iso": {
+            "format": "date",
+            "title": "Iso",
+            "type": "string"
+          },
+          "pay": {
+            "default": "cash",
+            "enum": [
+              "cash",
+              "bkash",
+              "nagad",
+              "rocket",
+              "card",
+              "bank"
+            ],
+            "title": "Pay",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cat",
+          "grp",
+          "amt",
+          "iso"
+        ],
+        "title": "ExpenseIn",
+        "type": "object"
+      },
+      "ExpenseListOut": {
+        "description": "Envelope for every list endpoint (ADR-0004 \u00a78).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenseOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "ExpenseListOut",
+        "type": "object"
+      },
+      "ExpenseOut": {
+        "description": "Public expense row; keys mirror the DB columns exactly.",
+        "properties": {
+          "amt": {
+            "title": "Amt",
+            "type": "string"
+          },
+          "cat": {
+            "title": "Cat",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "grp": {
+            "enum": [
+              "food",
+              "housing",
+              "utility",
+              "transport",
+              "health",
+              "education",
+              "personal",
+              "other"
+            ],
+            "title": "Grp",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "iso": {
+            "format": "date",
+            "title": "Iso",
+            "type": "string"
+          },
+          "pay": {
+            "enum": [
+              "cash",
+              "bkash",
+              "nagad",
+              "rocket",
+              "card",
+              "bank"
+            ],
+            "title": "Pay",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "cat",
+          "grp",
+          "amt",
+          "pay",
+          "iso",
+          "created_at"
+        ],
+        "title": "ExpenseOut",
+        "type": "object"
+      },
+      "ExpenseUpdate": {
+        "description": "PATCH /expenses/{id} body \u2014 every field optional (partial update).",
+        "properties": {
+          "amt": {
+            "anyOf": [
+              {
+                "examples": [
+                  "890.00"
+                ],
+                "pattern": "^\\d{1,10}\\.\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amt"
+          },
+          "cat": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cat"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "grp": {
+            "anyOf": [
+              {
+                "enum": [
+                  "food",
+                  "housing",
+                  "utility",
+                  "transport",
+                  "health",
+                  "education",
+                  "personal",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grp"
+          },
+          "iso": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cash",
+                  "bkash",
+                  "nagad",
+                  "rocket",
+                  "card",
+                  "bank"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          }
+        },
+        "title": "ExpenseUpdate",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -84,6 +398,121 @@
         "title": "LoginIn",
         "type": "object"
       },
+      "MonthlyReportOut": {
+        "properties": {
+          "by_day": {
+            "items": {
+              "$ref": "#/components/schemas/ReportByDay"
+            },
+            "title": "By Day",
+            "type": "array"
+          },
+          "by_group": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "By Group",
+            "type": "object"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          },
+          "ym": {
+            "title": "Ym",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ym",
+          "total",
+          "count",
+          "by_group",
+          "by_day"
+        ],
+        "title": "MonthlyReportOut",
+        "type": "object"
+      },
+      "ParsedItem": {
+        "description": "One expense candidate extracted from a transcript segment.",
+        "properties": {
+          "amt": {
+            "title": "Amt",
+            "type": "string"
+          },
+          "cat": {
+            "title": "Cat",
+            "type": "string"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "grp": {
+            "enum": [
+              "food",
+              "housing",
+              "utility",
+              "transport",
+              "health",
+              "education",
+              "personal",
+              "other"
+            ],
+            "title": "Grp",
+            "type": "string"
+          },
+          "iso": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cash",
+                  "bkash",
+                  "nagad",
+                  "rocket",
+                  "card",
+                  "bank"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          }
+        },
+        "required": [
+          "cat",
+          "grp",
+          "amt"
+        ],
+        "title": "ParsedItem",
+        "type": "object"
+      },
       "RefreshIn": {
         "description": "POST /auth/refresh body.",
         "properties": {
@@ -135,6 +564,43 @@
           "password"
         ],
         "title": "RegisterIn",
+        "type": "object"
+      },
+      "ReportByDay": {
+        "properties": {
+          "iso": {
+            "format": "date",
+            "title": "Iso",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "iso",
+          "total"
+        ],
+        "title": "ReportByDay",
+        "type": "object"
+      },
+      "ReportByMonth": {
+        "properties": {
+          "total": {
+            "title": "Total",
+            "type": "string"
+          },
+          "ym": {
+            "title": "Ym",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ym",
+          "total"
+        ],
+        "title": "ReportByMonth",
         "type": "object"
       },
       "UserOut": {
@@ -207,6 +673,84 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceParseIn": {
+        "description": "POST /voice/parse body.",
+        "properties": {
+          "text": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "VoiceParseIn",
+        "type": "object"
+      },
+      "VoiceParseOut": {
+        "properties": {
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParsedItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "confidence"
+        ],
+        "title": "VoiceParseOut",
+        "type": "object"
+      },
+      "YearlyReportOut": {
+        "properties": {
+          "by_group": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "By Group",
+            "type": "object"
+          },
+          "by_month": {
+            "items": {
+              "$ref": "#/components/schemas/ReportByMonth"
+            },
+            "title": "By Month",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "total",
+          "count",
+          "by_group",
+          "by_month"
+        ],
+        "title": "YearlyReportOut",
         "type": "object"
       }
     },
@@ -396,6 +940,316 @@
         ]
       }
     },
+    "/api/v1/expenses": {
+      "get": {
+        "description": "List the caller's expenses, newest first, keyset-paginated.",
+        "operationId": "list_expenses_api_v1_expenses_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Expenses",
+        "tags": [
+          "expenses"
+        ]
+      },
+      "post": {
+        "description": "Record one expense (201 with the stored row).",
+        "operationId": "create_expense_api_v1_expenses_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpenseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Expense",
+        "tags": [
+          "expenses"
+        ]
+      }
+    },
+    "/api/v1/expenses/bulk": {
+      "post": {
+        "description": "Insert up to 50 expenses for the caller in a single flush.",
+        "operationId": "create_expenses_bulk_api_v1_expenses_bulk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkExpensesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkExpensesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Expenses Bulk",
+        "tags": [
+          "expenses"
+        ]
+      }
+    },
+    "/api/v1/expenses/{expense_id}": {
+      "delete": {
+        "description": "Delete the caller's expense (204; unknown/foreign id \u2192 404).",
+        "operationId": "delete_expense_api_v1_expenses__expense_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "expense_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Expense Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Expense",
+        "tags": [
+          "expenses"
+        ]
+      },
+      "patch": {
+        "description": "Partially update the caller's expense (omitted fields stay as-is).",
+        "operationId": "update_expense_api_v1_expenses__expense_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "expense_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Expense Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpenseUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Expense",
+        "tags": [
+          "expenses"
+        ]
+      }
+    },
     "/api/v1/healthz": {
       "get": {
         "operationId": "healthz_api_v1_healthz_get",
@@ -414,6 +1268,163 @@
         "summary": "Healthz",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/reports/monthly": {
+      "get": {
+        "description": "Aggregates for one month (``?ym=YYYY-MM``, default: current month).",
+        "operationId": "monthly_report_api_v1_reports_monthly_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ym",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ym"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthlyReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Monthly Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/yearly": {
+      "get": {
+        "description": "Aggregates for one year (``?year=YYYY``, default: current year).",
+        "operationId": "yearly_report_api_v1_reports_yearly_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YearlyReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Yearly Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/voice/parse": {
+      "post": {
+        "description": "Rule-parse a Bengali voice transcript into expense candidates.",
+        "operationId": "parse_transcript_api_v1_voice_parse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceParseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceParseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Parse Transcript",
+        "tags": [
+          "voice"
         ]
       }
     },

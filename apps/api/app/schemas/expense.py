@@ -12,14 +12,14 @@ Rules implemented here (do not drift):
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import (
     AliasChoices,
-    BeforeValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
 )
@@ -41,7 +41,7 @@ PayMethod = Literal["cash", "bkash", "nagad", "rocket", "card", "bank"]
 AmtStr = Annotated[str, Field(pattern=r"^\d{1,10}\.\d{2}$", examples=["890.00"])]
 
 _TWO_PLACES = Decimal("0.01")
-_UTC = timezone.utc
+_UTC = UTC
 
 
 def _to_uuid_str(v: object) -> object:

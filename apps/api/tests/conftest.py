@@ -6,6 +6,7 @@ sessionmaker, a fresh MemoryKV injected per test, and an httpx AsyncClient
 speaking ASGI directly (no network).
 """
 
+import os
 from collections.abc import AsyncIterator
 
 import pytest
@@ -17,6 +18,13 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import StaticPool
+
+# Hermetic settings: apps/api/.env holds a REAL deployment config
+# (KHOROCH_ENV=prod, a custom auth rate limit, ...). os.environ outranks the
+# dotenv file in pydantic-settings, so pin the values the test contracts
+# assume *before* app.main (and its lru_cached Settings) are imported below.
+os.environ["KHOROCH_ENV"] = "local"
+os.environ["KHOROCH_AUTH_RATE_LIMIT"] = "5"
 
 import app.models
 from app.core.deps import get_kv_dep
