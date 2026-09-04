@@ -1,5 +1,5 @@
 /**
- * @khoroch/api-client — typed client for the Daily Khoroch API.
+ * @khoroch/api-client — typed client for the Daily Hisab API.
  *
  * The `paths`/`components` types are generated from apps/api/openapi.json by
  * `pnpm generate` (src/schema.gen.d.ts — do not edit by hand).

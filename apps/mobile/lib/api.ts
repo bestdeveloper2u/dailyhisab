@@ -1,5 +1,5 @@
 /**
- * Tiny typed HTTP client for the Khoroch auth API (FastAPI).
+ * Tiny typed HTTP client for the Hisab auth API (FastAPI).
  *
  * API_BASE is taken from EXPO_PUBLIC_API_URL (Expo inlines EXPO_PUBLIC_* env
  * vars at bundle time). Device/simulator builds must set it explicitly, e.g.:

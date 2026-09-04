@@ -1,5 +1,5 @@
 /**
- * Daily Khoroch — mobile theme.
+ * Daily Hisab — mobile theme.
  * Single mapping of @khoroch/core brand tokens to React Native style values.
  * Screens must use these tokens; no inline magic colors/radii (ADR-0003).
  */

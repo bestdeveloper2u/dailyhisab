@@ -6,7 +6,7 @@
 
 ## Context
 
-The legacy Daily Khoroch web app is frozen as a visual prototype at `www/index.html`
+The legacy Daily Hisab web app is frozen as a visual prototype at `www/index.html`
 (plain HTML/CSS, dark/light vars, app bar + sidebar + bottom tab bar + FAB). The new
 architecture is a pnpm monorepo with shared packages (`@khoroch/core` owning brand
 tokens, bn/en dictionary and money helpers). We need a React shell that starts from

@@ -1,5 +1,5 @@
 /**
- * Daily Khoroch — shared API types (mirror of FastAPI schemas; ADR-0004).
+ * Daily Hisab — shared API types (mirror of FastAPI schemas; ADR-0004).
  * Field names intentionally mirror DB columns (cat/grp/amt/pay/desc/iso) — see ADR-0004.
  */
 

@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="Daily Khoroch API",
+        title="Daily Hisab API",
         version=settings.version,
         docs_url="/api/docs",
         lifespan=lifespan,

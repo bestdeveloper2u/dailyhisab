@@ -16,7 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="KHOROCH_", env_file=".env", extra="ignore")
 
-    app_name: str = "Daily Khoroch API"
+    app_name: str = "Daily Hisab API"
     version: str = "0.3.0"
     env: str = "local"
     database_url: str = "sqlite+aiosqlite:///./khoroch.db"

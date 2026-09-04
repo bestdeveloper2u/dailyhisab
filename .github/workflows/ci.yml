@@ -1,4 +1,4 @@
-# Daily Khoroch — CI gates (mirror the local gates, ADR-0003).
+# Daily Hisab — CI gates (mirror the local gates, ADR-0003).
 #
 # deploy.yml is intentionally ABSENT: deploys are BLOCKED until the owner
 # provides Vercel / Supabase / GitHub credentials (Phase 4). Do not add deploy

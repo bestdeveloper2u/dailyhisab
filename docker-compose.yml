@@ -1,4 +1,4 @@
-# Daily Khoroch — LOCAL DEV infrastructure only.
+# Daily Hisab — LOCAL DEV infrastructure only.
 #
 # NOTE: the docker daemon is currently DOWN on this host; this stack is written
 # now and will be exercised in Phase 2. Do not point app envs at these ports in

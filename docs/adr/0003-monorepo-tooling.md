@@ -7,7 +7,7 @@
 
 ## Context
 
-Daily Khoroch is a pnpm workspace containing a Vite web app, an Expo (React
+Daily Hisab is a pnpm workspace containing a Vite web app, an Expo (React
 Native) mobile app, a FastAPI service, and shared TypeScript packages. The
 toolchain must satisfy several conflicting constraints at once:
 

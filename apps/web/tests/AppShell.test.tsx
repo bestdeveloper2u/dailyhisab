@@ -27,7 +27,7 @@ beforeEach(() => {
 describe("AppShell", () => {
   it("renders the brand wordmark and the v0.3.0 version chip", () => {
     renderShell();
-    expect(screen.getAllByText("Daily Khoroch").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Daily Hisab").length).toBeGreaterThan(0);
     expect(screen.getByText("v0.3.0")).toBeInTheDocument();
   });
 

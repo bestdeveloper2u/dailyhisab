@@ -1,5 +1,5 @@
 /**
- * Daily Khoroch — bn/en i18n.
+ * Daily Hisab — bn/en i18n.
  * Bengali-first UI; English full parity. Keys must exist in BOTH dicts (enforced by test).
  */
 
@@ -7,8 +7,8 @@ export type Lang = "bn" | "en";
 
 export const DICT = {
   bn: {
-    appName: "Daily Khoroch",
-    tagline: "দৈনিক খরচের হিসাব",
+    appName: "Daily Hisab",
+    tagline: "দৈনিক হিসাবের হিসাব",
     navDashboard: "ড্যাশবোর্ড",
     navExpenses: "খরচ",
     navReport: "রিপোর্ট",
@@ -30,7 +30,7 @@ export const DICT = {
     savedCheck: "সংরক্ষিত ✓",
   },
   en: {
-    appName: "Daily Khoroch",
+    appName: "Daily Hisab",
     tagline: "Daily expense tracking",
     navDashboard: "Dashboard",
     navExpenses: "Expenses",

@@ -1,12 +1,12 @@
 /**
- * Daily Khoroch — brand tokens (source of truth: docs/BRAND.md).
+ * Daily Hisab — brand tokens (source of truth: docs/BRAND.md).
  * Web maps these to CSS vars/Tailwind theme; mobile to a RN theme object.
  */
 
-export const BRAND_NAME = "Daily Khoroch";
+export const BRAND_NAME = "Daily Hisab";
 
 export const TAGLINE = {
-  bn: "দৈনিক খরচের হিসাব",
+  bn: "দৈনিক হিসাবের হিসাব",
   en: "Daily expense tracking",
 } as const;
 

@@ -1,6 +1,6 @@
 # khoroch-api
 
-FastAPI backend for **Daily Khoroch** — Python 3.13, SQLAlchemy 2 (async),
+FastAPI backend for **Daily Hisab** — Python 3.13, SQLAlchemy 2 (async),
 Alembic, managed with [uv](https://docs.astral.sh/uv/).
 
 ## Layout

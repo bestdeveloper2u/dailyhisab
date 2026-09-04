@@ -1,5 +1,5 @@
 /**
- * Daily Khoroch — money helpers.
+ * Daily Hisab — money helpers.
  * Convention: amounts travel as numeric(12,2) *strings* at the API edge (ADR-0004),
  * rendered with ৳ prefix and Indian digit grouping (৳25,000 / ৳১২,৩৪৫).
  */

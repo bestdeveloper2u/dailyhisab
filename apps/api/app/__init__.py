@@ -1,3 +1,3 @@
-"""Daily Khoroch API application package."""
+"""Daily Hisab API application package."""
 
 __all__ = ["main"]

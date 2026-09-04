@@ -7,7 +7,7 @@ interface LogoProps {
   size?: number;
 }
 
-/** ৳ on an emerald rounded square + "Daily Khoroch" wordmark (Inter 700). */
+/** ৳ on an emerald rounded square + "Daily Hisab" wordmark (Inter 700). */
 export function Logo({ withVersion = false, size = 30 }: LogoProps) {
   return (
     <span className="flex min-w-0 items-center gap-2.5">
