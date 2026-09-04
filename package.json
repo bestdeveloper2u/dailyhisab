@@ -1,0 +1,23 @@
+{
+  "name": "khoroch-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": { "node": ">=22" },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"],
+    "overrides": {
+      "react": "19.1.0",
+      "react-dom": "19.1.0"
+    }
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @khoroch/web dev",
+    "build:web": "pnpm --filter @khoroch/web build",
+    "test:web": "pnpm --filter @khoroch/web test",
+    "lint:web": "pnpm --filter @khoroch/web lint",
+    "typecheck:web": "pnpm --filter @khoroch/web typecheck",
+    "typecheck:mobile": "pnpm --filter @khoroch/mobile typecheck",
+    "test:core": "pnpm --filter @khoroch/core test",
+    "generate:client": "pnpm --filter @khoroch/api-client generate"
+  }
+}

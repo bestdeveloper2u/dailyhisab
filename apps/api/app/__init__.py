@@ -1,0 +1,3 @@
+"""Daily Khoroch API application package."""
+
+__all__ = ["main"]

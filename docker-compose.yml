@@ -1,0 +1,42 @@
+# Daily Khoroch — LOCAL DEV infrastructure only.
+#
+# NOTE: the docker daemon is currently DOWN on this host; this stack is written
+# now and will be exercised in Phase 2. Do not point app envs at these ports in
+# production — prod targets are Supabase Postgres + managed Valkey (ADR-0003).
+#
+# Port map (uncommon hosts to avoid collisions):
+#   db    -> localhost:54329 -> 5432
+#   cache -> localhost:63799 -> 6379
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "54329:5432"
+    environment:
+      POSTGRES_USER: khoroch
+      POSTGRES_PASSWORD: khoroch
+      POSTGRES_DB: khoroch
+    volumes:
+      - khoroch_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U khoroch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cache:
+    # valkey/valkey:7.2-alpine verified against Docker Hub tag listing (2026-09-04).
+    image: valkey/valkey:7.2-alpine
+    restart: unless-stopped
+    ports:
+      - "63799:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  khoroch_pgdata:

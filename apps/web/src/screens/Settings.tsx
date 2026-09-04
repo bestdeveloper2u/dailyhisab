@@ -1,0 +1,50 @@
+import { APP_VERSION, t } from "@khoroch/core";
+import { useNavigate } from "react-router";
+import { LangToggle } from "../components/LangToggle";
+import { useAuthStore } from "../store/auth";
+import { useLangStore } from "../store/lang";
+
+export function Settings() {
+  const lang = useLangStore((s) => s.lang);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login", { replace: true });
+  }
+
+  return (
+    <section>
+      <h1 className="text-[22px] font-bold sm:text-2xl">{t(lang, "navSettings")}</h1>
+      <div className="mt-4 overflow-hidden rounded-card border border-line bg-surface shadow-card">
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
+          <span className="flex-1 text-sm font-medium">{t(lang, "language")}</span>
+          <LangToggle />
+        </div>
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
+          <span className="flex-1 text-sm font-medium">{lang === "bn" ? "ভার্সন" : "Version"}</span>
+          <span className="rounded-full border border-line px-2 py-0.5 font-en text-[11px] font-semibold leading-none text-muted">
+            v{APP_VERSION}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {user?.name ?? user?.email ?? t(lang, "login")}
+            {user?.email && (
+              <span className="ml-2 font-en text-xs font-normal text-muted">{user.email}</span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="shrink-0 rounded-control border border-line px-3.5 py-2 text-sm font-semibold text-danger transition-colors hover:bg-surface-2"
+          >
+            {t(lang, "logout")}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}

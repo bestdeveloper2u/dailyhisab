@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/*
+ * Brand tokens — mirrored from @khoroch/core (COLORS / RADII, ADR-0006).
+ * Core stays the single source of truth; these values map 1:1 to its CSS_VARS.
+ */
+@theme {
+  --color-emerald: #0e6b50;
+  --color-emerald-soft: #e3f0ea;
+  --color-ink: #1c2321;
+  --color-muted: #6b7570;
+  --color-ivory: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1efe9;
+  --color-line: #e6e3db;
+  --color-danger: #b42318;
+  --color-warning: #b45309;
+  --font-bn: "Noto Sans Bengali", system-ui, sans-serif;
+  --font-en: "Inter", system-ui, sans-serif;
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --shadow-card: 0 1px 2px rgba(28, 35, 33, 0.05), 0 8px 28px rgba(28, 35, 33, 0.07);
+}
+
+body {
+  background-color: var(--color-ivory);
+  color: var(--color-ink);
+  font-family: var(--font-bn);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-emerald);
+  outline-offset: 2px;
+}
+
+/* Bottom tab bar clears the iOS/Android home-indicator safe area. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Floating action button sits above the tab bar (clear of it on desktop). */
+.fab-pos {
+  bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 64rem) {
+  .fab-pos {
+    bottom: calc(26px + env(safe-area-inset-bottom));
+  }
+}

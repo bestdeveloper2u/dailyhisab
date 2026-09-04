@@ -1,0 +1,85 @@
+# Daily Khoroch — CI gates (mirror the local gates, ADR-0003).
+#
+# deploy.yml is intentionally ABSENT: deploys are BLOCKED until the owner
+# provides Vercel / Supabase / GitHub credentials (Phase 4). Do not add deploy
+# jobs here until then.
+#
+# All triggers are path-pinned to app/** so changes outside the monorepo
+# (docs, ops, demos) don't burn CI minutes.
+
+name: CI
+
+on:
+  push:
+    paths: ["app/**"]
+  pull_request:
+    paths: ["app/**"]
+
+jobs:
+  api-gates:
+    name: API (ruff + mypy + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - name: Sync dependencies
+        run: uv sync
+      - name: Lint
+        run: uv run ruff check .
+      - name: Typecheck
+        run: uv run mypy app
+      - name: Test
+        run: uv run pytest -q
+
+  web-gates:
+    name: Web (core + web — typecheck, lint, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - name: Install (frozen lockfile)
+        run: cd app && pnpm install --frozen-lockfile
+      - name: Typecheck (@khoroch/core, @khoroch/web)
+        run: |
+          cd app
+          pnpm --filter @khoroch/core typecheck
+          pnpm --filter @khoroch/web typecheck
+      - name: Lint (@khoroch/web — core ships raw TS, no eslint config)
+        run: cd app && pnpm --filter @khoroch/web lint
+      - name: Test (@khoroch/core, @khoroch/web)
+        run: |
+          cd app
+          pnpm --filter @khoroch/core test
+          pnpm --filter @khoroch/web test
+      - name: Build web
+        run: cd app && pnpm --filter @khoroch/web build
+
+  mobile-typecheck:
+    name: Mobile (tsc --noEmit — no emulator in CI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - name: Install (frozen lockfile)
+        run: cd app && pnpm install --frozen-lockfile
+      - name: Typecheck @khoroch/mobile
+        run: cd app && pnpm --filter @khoroch/mobile typecheck
