@@ -53,4 +53,4 @@ export const CSS_VARS: Record<string, string> = {
   "--dk-radius-control": `${RADII.control}px`,
 };
 
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.6.0";

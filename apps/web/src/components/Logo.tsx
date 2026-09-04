@@ -1,7 +1,7 @@
 import { APP_VERSION, BRAND_NAME } from "@khoroch/core";
 
 interface LogoProps {
-  /** Render the muted version pill (e.g. "v0.3.0") next to the wordmark. */
+  /** Render the muted version pill (e.g. "v0.6.0") next to the wordmark. */
   withVersion?: boolean;
   /** Mark size in px; corner radius is 30% of the mark per BRAND. */
   size?: number;
