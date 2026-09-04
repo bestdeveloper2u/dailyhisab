@@ -23,7 +23,17 @@ def get_engine_and_sessionmaker() -> tuple[AsyncEngine, async_sessionmaker[Async
     """Create (once) and return the process-wide async engine + sessionmaker."""
     global _engine, _sessionmaker
     if _engine is None or _sessionmaker is None:
-        _engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+        settings = get_settings()
+        connect_args: dict = {}
+        if "pooler.supabase.com" in settings.database_url or "pgbouncer=true" in settings.database_url:
+            # Transaction-mode poolers (pgbouncer/Supabase pooler) do not support
+            # asyncpg prepared statements — disable the driver-level cache.
+            connect_args["statement_cache_size"] = 0
+        _engine = create_async_engine(
+            settings.database_url,
+            pool_pre_ping=True,
+            connect_args=connect_args,
+        )
         _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine, _sessionmaker
 
