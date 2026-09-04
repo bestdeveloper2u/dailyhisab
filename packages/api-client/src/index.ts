@@ -64,11 +64,31 @@ export function configureAuth(handlers: Partial<AuthHandlers>): void {
   Object.assign(auth, handlers);
 }
 
-/** Extract the human-readable `{ detail }` message (Flatten 422 arrays). */
-function errorMessage(err: unknown): string {
+export type Lang = "bn" | "en";
+
+/**
+ * Extract the human-readable message from a FastAPI error body (ADR-0004 §7):
+ *  - string `detail` → verbatim (auth endpoints);
+ *  - domain errors  → `{ code, message_bn, message_en }` triple, resolved by
+ *    `lang` (bn-first product, so bn wins ties by default);
+ *  - 422 validation → `{ detail: [...] }` array, flattened to `msg` strings.
+ */
+export function errorMessage(err: unknown, lang: Lang = "bn"): string {
   if (typeof err === "object" && err !== null && "detail" in err) {
     const detail = (err as { detail?: unknown }).detail;
     if (typeof detail === "string") return detail;
+    if (
+      typeof detail === "object" &&
+      detail !== null &&
+      ("message_bn" in detail || "message_en" in detail)
+    ) {
+      const triple = detail as { message_bn?: unknown; message_en?: unknown };
+      const preferred = lang === "bn" ? triple.message_bn : triple.message_en;
+      const fallback = lang === "bn" ? triple.message_en : triple.message_bn;
+      if (typeof preferred === "string" && preferred) return preferred;
+      if (typeof fallback === "string" && fallback) return fallback;
+      return "Unexpected error";
+    }
     if (Array.isArray(detail)) {
       return detail
         .map((item) =>
@@ -205,4 +225,119 @@ export async function apiMe(): Promise<ApiResult<User>> {
   const { data, error, response } = await api.GET("/api/v1/auth/me");
   if (data) return { ok: true, data };
   return { ok: false, status: response.status, detail: errorMessage(error) };
+}
+
+/* ------------------------------------------------------------------ */
+/* Expenses / voice / reports (Phase 2 — ticket T2.2)                  */
+/* ------------------------------------------------------------------ */
+
+export type Expense = components["schemas"]["ExpenseOut"];
+export type ExpenseGroup = Expense["grp"];
+export type PayMethod = Expense["pay"];
+export type ExpenseCreateInput = components["schemas"]["ExpenseIn"];
+export type ExpenseUpdateInput = components["schemas"]["ExpenseUpdate"];
+export type ExpensePage = components["schemas"]["ExpenseListOut"];
+export type MonthlyReport = components["schemas"]["MonthlyReportOut"];
+export type YearlyReport = components["schemas"]["YearlyReportOut"];
+export type VoiceParseResult = components["schemas"]["VoiceParseOut"];
+export type ParsedExpense = components["schemas"]["ParsedItem"];
+
+export interface ExpenseListParams {
+  from?: string | null;
+  to?: string | null;
+  q?: string | null;
+  limit?: number;
+  cursor?: string | null;
+}
+
+export async function apiListExpenses(
+  params: ExpenseListParams,
+  lang: Lang = "bn",
+): Promise<ApiResult<ExpensePage>> {
+  const { data, error, response } = await api.GET("/api/v1/expenses", {
+    params: { query: params },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+export async function apiCreateExpense(
+  body: ExpenseCreateInput,
+  lang: Lang = "bn",
+): Promise<ApiResult<Expense>> {
+  const { data, error, response } = await api.POST("/api/v1/expenses", { body });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+export async function apiUpdateExpense(
+  expenseId: string,
+  body: ExpenseUpdateInput,
+  lang: Lang = "bn",
+): Promise<ApiResult<Expense>> {
+  const { data, error, response } = await api.PATCH("/api/v1/expenses/{expense_id}", {
+    params: { path: { expense_id: expenseId } },
+    body,
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+export async function apiDeleteExpense(
+  expenseId: string,
+  lang: Lang = "bn",
+): Promise<ApiResult<null>> {
+  const { error, response } = await api.DELETE("/api/v1/expenses/{expense_id}", {
+    params: { path: { expense_id: expenseId } },
+  });
+  if (response.ok) return { ok: true, data: null };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Voice multi-item insert — up to 50 expenses in one flush. */
+export async function apiBulkCreateExpenses(
+  items: ExpenseCreateInput[],
+  lang: Lang = "bn",
+): Promise<ApiResult<Expense[]>> {
+  const { data, error, response } = await api.POST("/api/v1/expenses/bulk", {
+    body: { items },
+  });
+  if (data) return { ok: true, data: data.items };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Rule-parse a Bengali voice transcript into expense candidates. */
+export async function apiVoiceParse(
+  text: string,
+  lang: Lang = "bn",
+): Promise<ApiResult<VoiceParseResult>> {
+  const { data, error, response } = await api.POST("/api/v1/voice/parse", {
+    body: { text },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Monthly aggregates (`?ym=YYYY-MM`; omit for the current month). */
+export async function apiMonthlyReport(
+  ym?: string | null,
+  lang: Lang = "bn",
+): Promise<ApiResult<MonthlyReport>> {
+  const { data, error, response } = await api.GET("/api/v1/reports/monthly", {
+    params: { query: ym ? { ym } : {} },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Yearly aggregates (`?year=YYYY`; omit for the current year). */
+export async function apiYearlyReport(
+  year?: number | null,
+  lang: Lang = "bn",
+): Promise<ApiResult<YearlyReport>> {
+  const { data, error, response } = await api.GET("/api/v1/reports/yearly", {
+    params: { query: year ? { year: String(year) } : {} },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
 }

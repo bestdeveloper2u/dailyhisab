@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useNavigate } from "react-router";
 import { t } from "@khoroch/core";
 import { useLangStore } from "../store/lang";
 import { LangToggle } from "./LangToggle";
@@ -33,6 +33,7 @@ const TABS = NAV.filter((item) => item.key !== "navBudget");
  */
 export function AppShell() {
   const lang = useLangStore((s) => s.lang);
+  const navigate = useNavigate();
 
   return (
     <div className={`min-h-dvh bg-ivory text-ink ${lang === "bn" ? "font-bn" : "font-en"}`}>
@@ -71,6 +72,7 @@ export function AppShell() {
       <button
         type="button"
         aria-label={t(lang, "addExpense")}
+        onClick={() => navigate("/expenses?voice=1")}
         className="fab-pos fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-emerald text-white shadow-card lg:right-8"
       >
         <IconPlus className="h-6 w-6" />

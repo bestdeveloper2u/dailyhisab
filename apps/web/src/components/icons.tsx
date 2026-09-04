@@ -81,3 +81,42 @@ export function IconPlus(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconMic(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3" />
+    </Svg>
+  );
+}
+
+export function IconPencil(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m14.5 5.5 4 4L8 20H4v-4Z" />
+      <path d="m12.5 7.5 4 4" />
+    </Svg>
+  );
+}
+
+export function IconTrash(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 7h16" />
+      <path d="M9 7V4h6v3" />
+      <path d="M6.5 7 7.5 21h9l1-14" />
+      <path d="M10 11v6M14 11v6" />
+    </Svg>
+  );
+}
+
+export function IconSearch(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </Svg>
+  );
+}

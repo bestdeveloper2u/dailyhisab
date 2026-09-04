@@ -104,6 +104,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Expenses
+         * @description List the caller's expenses, newest first, keyset-paginated.
+         */
+        get: operations["list_expenses_api_v1_expenses_get"];
+        put?: never;
+        /**
+         * Create Expense
+         * @description Record one expense (201 with the stored row).
+         */
+        post: operations["create_expense_api_v1_expenses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Expenses Bulk
+         * @description Insert up to 50 expenses for the caller in a single flush.
+         */
+        post: operations["create_expenses_bulk_api_v1_expenses_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{expense_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Expense
+         * @description Delete the caller's expense (204; unknown/foreign id → 404).
+         */
+        delete: operations["delete_expense_api_v1_expenses__expense_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Expense
+         * @description Partially update the caller's expense (omitted fields stay as-is).
+         */
+        patch: operations["update_expense_api_v1_expenses__expense_id__patch"];
+        trace?: never;
+    };
     "/api/v1/healthz": {
         parameters: {
             query?: never;
@@ -115,6 +183,66 @@ export interface paths {
         get: operations["healthz_api_v1_healthz_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Monthly Report
+         * @description Aggregates for one month (``?ym=YYYY-MM``, default: current month).
+         */
+        get: operations["monthly_report_api_v1_reports_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/yearly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Yearly Report
+         * @description Aggregates for one year (``?year=YYYY``, default: current year).
+         */
+        get: operations["yearly_report_api_v1_reports_yearly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/voice/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse Transcript
+         * @description Rule-parse a Bengali voice transcript into expense candidates.
+         */
+        post: operations["parse_transcript_api_v1_voice_parse_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -153,6 +281,111 @@ export interface components {
             refreshToken: string;
             user: components["schemas"]["UserOut"];
         };
+        /**
+         * BulkExpensesIn
+         * @description POST /expenses/bulk body (voice multi-item inserts).
+         */
+        BulkExpensesIn: {
+            /** Items */
+            items: components["schemas"]["ExpenseIn"][];
+        };
+        /** BulkExpensesOut */
+        BulkExpensesOut: {
+            /** Items */
+            items: components["schemas"]["ExpenseOut"][];
+        };
+        /**
+         * ExpenseIn
+         * @description POST /expenses and POST /expenses/bulk item body.
+         */
+        ExpenseIn: {
+            /**
+             * Amt
+             * @example 890.00
+             */
+            amt: string;
+            /** Cat */
+            cat: string;
+            /** Desc */
+            desc?: string | null;
+            /**
+             * Grp
+             * @enum {string}
+             */
+            grp: "food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other";
+            /**
+             * Iso
+             * Format: date
+             */
+            iso: string;
+            /**
+             * Pay
+             * @default cash
+             * @enum {string}
+             */
+            pay: "cash" | "bkash" | "nagad" | "rocket" | "card" | "bank";
+        };
+        /**
+         * ExpenseListOut
+         * @description Envelope for every list endpoint (ADR-0004 §8).
+         */
+        ExpenseListOut: {
+            /** Items */
+            items: components["schemas"]["ExpenseOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * ExpenseOut
+         * @description Public expense row; keys mirror the DB columns exactly.
+         */
+        ExpenseOut: {
+            /** Amt */
+            amt: string;
+            /** Cat */
+            cat: string;
+            /** Created At */
+            created_at: string;
+            /** Desc */
+            desc?: string | null;
+            /**
+             * Grp
+             * @enum {string}
+             */
+            grp: "food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other";
+            /** Id */
+            id: string;
+            /**
+             * Iso
+             * Format: date
+             */
+            iso: string;
+            /**
+             * Pay
+             * @enum {string}
+             */
+            pay: "cash" | "bkash" | "nagad" | "rocket" | "card" | "bank";
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * ExpenseUpdate
+         * @description PATCH /expenses/{id} body — every field optional (partial update).
+         */
+        ExpenseUpdate: {
+            /** Amt */
+            amt?: string | null;
+            /** Cat */
+            cat?: string | null;
+            /** Desc */
+            desc?: string | null;
+            /** Grp */
+            grp?: ("food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other") | null;
+            /** Iso */
+            iso?: string | null;
+            /** Pay */
+            pay?: ("cash" | "bkash" | "nagad" | "rocket" | "card" | "bank") | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -177,6 +410,42 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MonthlyReportOut */
+        MonthlyReportOut: {
+            /** By Day */
+            by_day: components["schemas"]["ReportByDay"][];
+            /** By Group */
+            by_group: {
+                [key: string]: string;
+            };
+            /** Count */
+            count: number;
+            /** Total */
+            total: string;
+            /** Ym */
+            ym: string;
+        };
+        /**
+         * ParsedItem
+         * @description One expense candidate extracted from a transcript segment.
+         */
+        ParsedItem: {
+            /** Amt */
+            amt: string;
+            /** Cat */
+            cat: string;
+            /** Desc */
+            desc?: string | null;
+            /**
+             * Grp
+             * @enum {string}
+             */
+            grp: "food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other";
+            /** Iso */
+            iso?: string | null;
+            /** Pay */
+            pay?: ("cash" | "bkash" | "nagad" | "rocket" | "card" | "bank") | null;
+        };
         /**
          * RefreshIn
          * @description POST /auth/refresh body.
@@ -196,6 +465,23 @@ export interface components {
             name?: string | null;
             /** Password */
             password: string;
+        };
+        /** ReportByDay */
+        ReportByDay: {
+            /**
+             * Iso
+             * Format: date
+             */
+            iso: string;
+            /** Total */
+            total: string;
+        };
+        /** ReportByMonth */
+        ReportByMonth: {
+            /** Total */
+            total: string;
+            /** Ym */
+            ym: string;
         };
         /**
          * UserOut
@@ -224,6 +510,36 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * VoiceParseIn
+         * @description POST /voice/parse body.
+         */
+        VoiceParseIn: {
+            /** Text */
+            text: string;
+        };
+        /** VoiceParseOut */
+        VoiceParseOut: {
+            /** Confidence */
+            confidence: number;
+            /** Items */
+            items: components["schemas"]["ParsedItem"][];
+        };
+        /** YearlyReportOut */
+        YearlyReportOut: {
+            /** By Group */
+            by_group: {
+                [key: string]: string;
+            };
+            /** By Month */
+            by_month: components["schemas"]["ReportByMonth"][];
+            /** Count */
+            count: number;
+            /** Total */
+            total: string;
+            /** Year */
+            year: number;
         };
     };
     responses: never;
@@ -371,6 +687,171 @@ export interface operations {
             };
         };
     };
+    list_expenses_api_v1_expenses_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                q?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_expense_api_v1_expenses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_expenses_bulk_api_v1_expenses_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkExpensesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkExpensesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_expense_api_v1_expenses__expense_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_expense_api_v1_expenses__expense_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     healthz_api_v1_healthz_get: {
         parameters: {
             query?: never;
@@ -387,6 +868,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Healthz"];
+                };
+            };
+        };
+    };
+    monthly_report_api_v1_reports_monthly_get: {
+        parameters: {
+            query?: {
+                ym?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    yearly_report_api_v1_reports_yearly_get: {
+        parameters: {
+            query?: {
+                year?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearlyReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_transcript_api_v1_voice_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceParseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceParseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
