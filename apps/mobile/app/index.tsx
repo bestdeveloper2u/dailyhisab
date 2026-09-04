@@ -136,6 +136,34 @@ export default function Index() {
             >
               <Text style={styles.addButtonLabel}>＋ {t("bn", "addExpense")}</Text>
             </Pressable>
+            <View style={styles.navRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.navButton,
+                  pressed && styles.navButtonPressed,
+                ]}
+                onPress={() => router.push("/dashboard")}
+                accessibilityRole="button"
+                accessibilityLabel={t("bn", "navDashboard")}
+              >
+                <Text style={styles.navButtonLabel}>
+                  {t("bn", "navDashboard")} →
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.navButton,
+                  pressed && styles.navButtonPressed,
+                ]}
+                onPress={() => router.push("/debts")}
+                accessibilityRole="button"
+                accessibilityLabel={t("bn", "navDebts")}
+              >
+                <Text style={styles.navButtonLabel}>
+                  {t("bn", "navDebts")} →
+                </Text>
+              </Pressable>
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -302,6 +330,25 @@ const styles = StyleSheet.create({
   addButtonLabel: {
     color: theme.colors.onAccent,
     fontSize: 16,
+    fontWeight: "600",
+  },
+  navRow: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+  },
+  navButton: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.control,
+    alignItems: "center",
+    paddingVertical: theme.spacing.md,
+  },
+  navButtonPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  navButtonLabel: {
+    color: theme.colors.ink,
+    fontSize: 15,
     fontWeight: "600",
   },
   row: {

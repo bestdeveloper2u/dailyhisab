@@ -253,3 +253,135 @@ export async function createExpense(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
+
+// --- Dashboard report (Phase 3, ADR-0004) ------------------------------------
+
+/**
+ * GET /api/v1/reports/monthly payload. Money values are decimal STRINGS
+ * ("1234.50"); `by_group` maps group name → decimal string; `by_day` is
+ * ordered ascending by day of month.
+ */
+export interface MonthlyReport {
+  ym: string; // "YYYY-MM"
+  total: string; // decimal string, 2dp
+  count: number; // expense rows in the month
+  by_group: Record<string, string>; // grp → decimal string
+  by_day: { iso: string; total: string }[];
+}
+
+/** GET /api/v1/reports/monthly?ym=YYYY-MM (Bearer access) → 200; 400 invalid_ym. */
+export async function monthlyReport(
+  accessToken: string,
+  ym?: string,
+): Promise<MonthlyReport> {
+  const suffix = ym !== undefined ? `?ym=${encodeURIComponent(ym)}` : "";
+  return request<MonthlyReport>(`/api/v1/reports/monthly${suffix}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+// --- Debts (Phase 3, ADR-0004) ------------------------------------------------
+
+/** lend = I gave money out, borrow = I took money in. */
+export type DebtDir = "lend" | "borrow";
+
+/** ?status= filter for GET /api/v1/debts (default "open"). */
+export type DebtStatusFilter = "open" | "settled" | "all";
+
+/**
+ * One debt row — GET/POST /api/v1/debts payload. Keys mirror the DB columns
+ * exactly (ADR-0004 §3): no camelCase translation.
+ */
+export interface Debt {
+  id: string;
+  user_id: string;
+  party: string;
+  dir: DebtDir;
+  /** Decimal string "2000.00" — never a JSON number (ADR-0004 §1). */
+  amt: string;
+  /** Serialized as explicit null when absent (ADR-0004 §6). */
+  note: string | null;
+  /** Event date "YYYY-MM-DD". */
+  iso: string;
+  /** RFC 3339 UTC with Z, or explicit null while the debt is open. */
+  settled_at: string | null;
+  /** RFC 3339 UTC with Z (ADR-0004 §4). */
+  created_at: string;
+}
+
+/** Envelope for GET /api/v1/debts (ADR-0004 §8). */
+export interface DebtList {
+  items: Debt[];
+  /** Opaque keyset cursor; null on the last page. */
+  next_cursor: string | null;
+}
+
+/** GET /api/v1/debts query params; all optional (status defaults to "open"). */
+export interface ListDebtsParams {
+  status?: DebtStatusFilter;
+  limit?: number; // 1..100, default 20
+  cursor?: string; // opaque next_cursor from the previous page
+}
+
+/** POST /api/v1/debts body. `iso` defaults to today server-side. */
+export interface DebtCreateInput {
+  party: string; // 1..120 chars
+  dir: DebtDir;
+  /** Decimal string matching ^\d{1,10}\.\d{2}$, > 0 — e.g. "2000.00". */
+  amt: string;
+  note?: string | null; // max 200 chars
+  iso?: string | null; // YYYY-MM-DD
+}
+
+/** POST /api/v1/debts/{id}/pay result — FULL settles the row, PARTIAL shrinks it. */
+export interface DebtPayResult {
+  status: "FULL" | "PARTIAL";
+  debt: Debt;
+}
+
+/** GET /api/v1/debts (Bearer access) → 200 envelope; 400 invalid_cursor. */
+export async function listDebts(
+  accessToken: string,
+  params: ListDebtsParams = {},
+): Promise<DebtList> {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      qs.set(key, String(value));
+    }
+  }
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+  return request<DebtList>(`/api/v1/debts${suffix}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/** POST /api/v1/debts (Bearer access) → 201 stored row; 422 validation. */
+export async function createDebt(
+  accessToken: string,
+  input: DebtCreateInput,
+): Promise<Debt> {
+  return request<Debt>("/api/v1/debts", {
+    method: "POST",
+    body: JSON.stringify(input),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/**
+ * POST /api/v1/debts/{id}/pay (Bearer access) → 200 {status, debt};
+ * 409 debt_already_settled; 404 unknown/foreign id; 422 validation.
+ */
+export async function payDebt(
+  accessToken: string,
+  debtId: string,
+  amt: string,
+): Promise<DebtPayResult> {
+  return request<DebtPayResult>(`/api/v1/debts/${debtId}/pay`, {
+    method: "POST",
+    body: JSON.stringify({ amt }),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
