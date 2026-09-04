@@ -8,7 +8,7 @@ export type Lang = "bn" | "en";
 export const DICT = {
   bn: {
     appName: "Daily Hisab",
-    tagline: "দৈনিক হিসাবের হিসাব",
+    tagline: "দৈনিক খরচের হিসাব",
     navDashboard: "ড্যাশবোর্ড",
     navExpenses: "খরচ",
     navReport: "রিপোর্ট",

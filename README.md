@@ -1,6 +1,6 @@
 # Daily Hisab
 
-দৈনিক হিসাবের হিসাব — voice-first expense tracker.
+দৈনিক খরচের হিসাব — voice-first expense tracker.
 
 - Web: React 19 + TS + Vite + Tailwind v4
 - API: Python 3.13 + FastAPI + SQLAlchemy 2 async (Supabase Postgres)

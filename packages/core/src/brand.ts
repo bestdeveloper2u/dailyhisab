@@ -6,7 +6,7 @@
 export const BRAND_NAME = "Daily Hisab";
 
 export const TAGLINE = {
-  bn: "দৈনিক হিসাবের হিসাব",
+  bn: "দৈনিক খরচের হিসাব",
   en: "Daily expense tracking",
 } as const;
 
