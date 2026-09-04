@@ -104,6 +104,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Budgets
+         * @description Budget vs spend for one month (``?ym=YYYY-MM``, default: current).
+         */
+        get: operations["get_budgets_api_v1_budgets_get"];
+        /**
+         * Put Budgets
+         * @description Upsert the caller's budget; returns the GET view for the current month.
+         */
+        put: operations["put_budgets_api_v1_budgets_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Debts
+         * @description List the caller's debts, newest first, keyset-paginated.
+         *
+         *     ``?status=open`` (default) keeps rows with ``settled_at IS NULL``;
+         *     ``settled`` the complement; ``all`` both.
+         */
+        get: operations["list_debts_api_v1_debts_get"];
+        put?: never;
+        /**
+         * Create Debt
+         * @description Record one debt (201 with the stored row; ``iso`` defaults to today).
+         */
+        post: operations["create_debt_api_v1_debts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debts/{debt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Debt
+         * @description Delete the caller's debt (204; unknown/foreign id → 404).
+         */
+        delete: operations["delete_debt_api_v1_debts__debt_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Debt
+         * @description Partially update the caller's debt (omitted fields stay as-is).
+         */
+        patch: operations["update_debt_api_v1_debts__debt_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/debts/{debt_id}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay Debt
+         * @description Close out a debt with a payment.
+         *
+         *     ``amt >= debt.amt`` → FULL: the debt settles (``settled_at`` = now UTC,
+         *     the stored amount is left untouched — overpay is not recorded).
+         *     ``0 < amt < debt.amt`` → PARTIAL: the remaining amount shrinks.
+         *     Paying an already-settled debt → 409 ``debt_already_settled``.
+         */
+        post: operations["pay_debt_api_v1_debts__debt_id__pay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expenses": {
         parameters: {
             query?: never;
@@ -170,6 +270,26 @@ export interface paths {
          * @description Partially update the caller's expense (omitted fields stay as-is).
          */
         patch: operations["update_expense_api_v1_expenses__expense_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/export/expenses.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Expenses Csv
+         * @description Stream the caller's expenses as a Bengali-friendly CSV attachment.
+         */
+        get: operations["export_expenses_csv_api_v1_export_expenses_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/healthz": {
@@ -282,6 +402,52 @@ export interface components {
             user: components["schemas"]["UserOut"];
         };
         /**
+         * BudgetCatUsage
+         * @description Per-category budget vs actual spend for one month.
+         */
+        BudgetCatUsage: {
+            /** Budget */
+            budget: string;
+            /** Spent */
+            spent: string;
+            /** Usage Pct */
+            usage_pct: number;
+        };
+        /**
+         * BudgetIn
+         * @description PUT /budgets body — both fields optional (partial upsert).
+         */
+        BudgetIn: {
+            /** Cats */
+            cats?: {
+                [key: string]: string;
+            } | null;
+            /** Total */
+            total?: string | null;
+        };
+        /**
+         * BudgetOut
+         * @description GET /budgets body: stored budget merged with that month's spending.
+         */
+        BudgetOut: {
+            /** By Cat */
+            by_cat: {
+                [key: string]: components["schemas"]["BudgetCatUsage"];
+            };
+            /** Cats */
+            cats: {
+                [key: string]: string;
+            };
+            /** Spent */
+            spent: string;
+            /** Total */
+            total: string;
+            /** Usage Pct */
+            usage_pct: number;
+            /** Ym */
+            ym: string;
+        };
+        /**
          * BulkExpensesIn
          * @description POST /expenses/bulk body (voice multi-item inserts).
          */
@@ -293,6 +459,107 @@ export interface components {
         BulkExpensesOut: {
             /** Items */
             items: components["schemas"]["ExpenseOut"][];
+        };
+        /**
+         * DebtIn
+         * @description POST /debts body. ``iso`` defaults to today (router fills it).
+         */
+        DebtIn: {
+            /**
+             * Amt
+             * @example 890.00
+             */
+            amt: string;
+            /**
+             * Dir
+             * @enum {string}
+             */
+            dir: "lend" | "borrow";
+            /** Iso */
+            iso?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Party */
+            party: string;
+        };
+        /**
+         * DebtListOut
+         * @description Envelope for GET /debts (ADR-0004 §8).
+         */
+        DebtListOut: {
+            /** Items */
+            items: components["schemas"]["DebtOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * DebtOut
+         * @description Public debt row; keys mirror the DB columns exactly.
+         */
+        DebtOut: {
+            /** Amt */
+            amt: string;
+            /** Created At */
+            created_at: string;
+            /**
+             * Dir
+             * @enum {string}
+             */
+            dir: "lend" | "borrow";
+            /** Id */
+            id: string;
+            /**
+             * Iso
+             * Format: date
+             */
+            iso: string;
+            /** Note */
+            note?: string | null;
+            /** Party */
+            party: string;
+            /** Settled At */
+            settled_at?: string | null;
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * DebtPayIn
+         * @description POST /debts/{id}/pay body — the amount being paid back.
+         */
+        DebtPayIn: {
+            /**
+             * Amt
+             * @example 890.00
+             */
+            amt: string;
+        };
+        /**
+         * DebtPayOut
+         * @description Pay close-out result: FULL settles the debt, PARTIAL reduces it.
+         */
+        DebtPayOut: {
+            debt: components["schemas"]["DebtOut"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "FULL" | "PARTIAL";
+        };
+        /**
+         * DebtUpdate
+         * @description PATCH /debts/{id} body — every field optional (partial update).
+         */
+        DebtUpdate: {
+            /** Amt */
+            amt?: string | null;
+            /** Dir */
+            dir?: ("lend" | "borrow") | null;
+            /** Iso */
+            iso?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Party */
+            party?: string | null;
         };
         /**
          * ExpenseIn
@@ -687,6 +954,235 @@ export interface operations {
             };
         };
     };
+    get_budgets_api_v1_budgets_get: {
+        parameters: {
+            query?: {
+                ym?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_budgets_api_v1_budgets_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BudgetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_debts_api_v1_debts_get: {
+        parameters: {
+            query?: {
+                status?: "open" | "settled" | "all";
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_debt_api_v1_debts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebtIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_debt_api_v1_debts__debt_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_debt_api_v1_debts__debt_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebtUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pay_debt_api_v1_debts__debt_id__pay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                debt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebtPayIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebtPayOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_expenses_api_v1_expenses_get: {
         parameters: {
             query?: {
@@ -839,6 +1335,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExpenseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_expenses_csv_api_v1_export_expenses_csv_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

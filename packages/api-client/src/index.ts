@@ -341,3 +341,113 @@ export async function apiYearlyReport(
   if (data) return { ok: true, data };
   return { ok: false, status: response.status, detail: errorMessage(error, lang) };
 }
+
+/* ------------------------------------------------------------------ */
+/* Debts (Phase 3 — ticket T3.3)                                       */
+/* ------------------------------------------------------------------ */
+
+export type Debt = components["schemas"]["DebtOut"];
+export type DebtDir = Debt["dir"];
+export type DebtStatus = "open" | "settled" | "all";
+export type DebtPage = components["schemas"]["DebtListOut"];
+export type DebtCreateInput = components["schemas"]["DebtIn"];
+export type DebtUpdateInput = components["schemas"]["DebtUpdate"];
+export type DebtPayResult = components["schemas"]["DebtPayOut"];
+
+export interface DebtListParams {
+  status?: DebtStatus;
+  limit?: number;
+  cursor?: string | null;
+}
+
+/** Keyset-paginated debt list; `status=open` (default) hides settled rows. */
+export async function apiListDebts(
+  params: DebtListParams,
+  lang: Lang = "bn",
+): Promise<ApiResult<DebtPage>> {
+  const { data, error, response } = await api.GET("/api/v1/debts", {
+    params: { query: params as Record<string, string | number | undefined> },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Record one debt (201 with the stored row; `iso` defaults to today). */
+export async function apiCreateDebt(
+  body: DebtCreateInput,
+  lang: Lang = "bn",
+): Promise<ApiResult<Debt>> {
+  const { data, error, response } = await api.POST("/api/v1/debts", { body });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Partially update the caller's debt (omitted fields stay as-is). */
+export async function apiUpdateDebt(
+  debtId: string,
+  body: DebtUpdateInput,
+  lang: Lang = "bn",
+): Promise<ApiResult<Debt>> {
+  const { data, error, response } = await api.PATCH("/api/v1/debts/{debt_id}", {
+    params: { path: { debt_id: debtId } },
+    body,
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Delete the caller's debt (204; unknown/foreign id → 404). */
+export async function apiDeleteDebt(debtId: string, lang: Lang = "bn"): Promise<ApiResult<null>> {
+  const { error, response } = await api.DELETE("/api/v1/debts/{debt_id}", {
+    params: { path: { debt_id: debtId } },
+  });
+  if (response.ok) return { ok: true, data: null };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/**
+ * Pay back a debt: `amt >= debt.amt` → FULL (settled), smaller → PARTIAL
+ * (the returned row carries the shrunken amount). 409 when already settled.
+ */
+export async function apiPayDebt(
+  debtId: string,
+  amt: string,
+  lang: Lang = "bn",
+): Promise<ApiResult<DebtPayResult>> {
+  const { data, error, response } = await api.POST("/api/v1/debts/{debt_id}/pay", {
+    params: { path: { debt_id: debtId } },
+    body: { amt },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/* ------------------------------------------------------------------ */
+/* Budgets (Phase 3 — ticket T3.3)                                     */
+/* ------------------------------------------------------------------ */
+
+export type Budget = components["schemas"]["BudgetOut"];
+export type BudgetCatUsage = components["schemas"]["BudgetCatUsage"];
+export type BudgetInput = components["schemas"]["BudgetIn"];
+
+/** Budget vs spend for one month (`?ym=YYYY-MM`; default: current). */
+export async function apiGetBudget(
+  ym?: string | null,
+  lang: Lang = "bn",
+): Promise<ApiResult<Budget>> {
+  const { data, error, response } = await api.GET("/api/v1/budgets", {
+    params: { query: ym ? { ym } : {} },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Upsert the budget (total and/or per-category map); returns the GET view. */
+export async function apiPutBudget(
+  body: BudgetInput,
+  lang: Lang = "bn",
+): Promise<ApiResult<Budget>> {
+  const { data, error, response } = await api.PUT("/api/v1/budgets", { body });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
