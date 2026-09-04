@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install --frozen-lockfile",
+  "installCommand": "npx -y pnpm@10.34.5 install --frozen-lockfile",
   "buildCommand": "pnpm --filter @khoroch/web build",
   "outputDirectory": "apps/web/dist",
   "cleanUrls": true,
