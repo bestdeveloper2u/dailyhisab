@@ -193,6 +193,18 @@ export default function Dashboard() {
             styles.debtsButton,
             pressed && styles.debtsButtonPressed,
           ]}
+          onPress={() => router.push("/report")}
+          accessibilityRole="button"
+          accessibilityLabel={t("bn", "navReport")}
+        >
+          <Text style={styles.debtsButtonLabel}>{t("bn", "navReport")} →</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.debtsButton,
+            pressed && styles.debtsButtonPressed,
+          ]}
           onPress={() => router.push("/debts")}
           accessibilityRole="button"
           accessibilityLabel={STRINGS.bn.openDebts}

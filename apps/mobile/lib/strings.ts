@@ -79,6 +79,17 @@ export const STRINGS = {
     cancel: "বাতিল",
     errParty: "কার সাথে ধার, লিখুন।",
     errDebtAmount: "সঠিক পরিমাণ লিখুন (০ এর বেশি)।",
+
+    // Report (T5.1)
+    reportTitle: "রিপোর্ট",
+    modeMonthly: "মাসিক",
+    modeYearly: "বার্ষিক",
+    yearTotal: "এই বছরের মোট খরচ",
+    loadingReport: "রিপোর্ট লোড হচ্ছে…",
+    noExpensesThisYear: "এই বছরে কোনো খরচ নেই।",
+    byMonth: "মাস অনুযায়ী",
+    prevYear: "আগের বছর",
+    nextYear: "পরের বছর",
   },
   en: {
     account: "Account",
@@ -153,8 +164,51 @@ export const STRINGS = {
     cancel: "Cancel",
     errParty: "Enter who the debt is with.",
     errDebtAmount: "Enter a valid amount (greater than 0).",
+
+    // Report (T5.1)
+    reportTitle: "Report",
+    modeMonthly: "Monthly",
+    modeYearly: "Yearly",
+    yearTotal: "This year's total",
+    loadingReport: "Loading report…",
+    noExpensesThisYear: "No expenses this year.",
+    byMonth: "By month",
+    prevYear: "Previous year",
+    nextYear: "Next year",
   },
 } as const;
+
+/** Short month labels for the yearly by_month mini chart (index 0 = January). */
+export const MONTH_LABELS: Record<"bn" | "en", readonly string[]> = {
+  bn: [
+    "জানু",
+    "ফেব",
+    "মার্চ",
+    "এপ্রিল",
+    "মে",
+    "জুন",
+    "জুলাই",
+    "আগ",
+    "সেপ্ট",
+    "অক্টো",
+    "নভে",
+    "ডিসে",
+  ],
+  en: [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ],
+};
 
 export type MobileStringKey = keyof typeof STRINGS.bn;
 

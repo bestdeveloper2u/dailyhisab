@@ -281,6 +281,31 @@ export async function monthlyReport(
   });
 }
 
+/**
+ * GET /api/v1/reports/yearly payload. Money values are decimal STRINGS
+ * ("1234.50"); `by_group` maps group name → decimal string; `by_month` is
+ * ALWAYS all 12 months of the year, ascending, zero-filled ("0.00").
+ */
+export interface YearlyReport {
+  year: number; // YYYY
+  total: string; // decimal string, 2dp
+  count: number; // expense rows in the year
+  by_group: Record<string, string>; // grp → decimal string
+  by_month: { ym: string; total: string }[]; // 12 entries, "YYYY-MM"
+}
+
+/** GET /api/v1/reports/yearly?year=YYYY (Bearer access) → 200; 400 invalid_year. */
+export async function yearlyReport(
+  accessToken: string,
+  year?: number,
+): Promise<YearlyReport> {
+  const suffix = year !== undefined ? `?year=${String(year)}` : "";
+  return request<YearlyReport>(`/api/v1/reports/yearly${suffix}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 // --- Debts (Phase 3, ADR-0004) ------------------------------------------------
 
 /** lend = I gave money out, borrow = I took money in. */

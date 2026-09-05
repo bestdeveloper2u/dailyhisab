@@ -16,7 +16,10 @@ function RootNavigator() {
   return (
     <>
       <StatusBar style="dark" backgroundColor={theme.colors.ivory} />
-      <Stack screenOptions={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* Explicit registration keeps the Report route in the typed manifest. */}
+        <Stack.Screen name="report" />
+      </Stack>
     </>
   );
 }
