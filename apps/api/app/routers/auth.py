@@ -38,7 +38,14 @@ from app.core.security import (
 )
 from app.db.session import get_db
 from app.models.profile import DEMO_USER_NAME, Profile
-from app.schemas.auth import AuthOut, LoginIn, RefreshIn, RegisterIn, UserOut
+from app.schemas.auth import (
+    AuthOut,
+    LoginIn,
+    RefreshIn,
+    RegisterIn,
+    SessionProbeOut,
+    UserOut,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -212,24 +219,29 @@ async def _rotate_refresh(
     return profile, access, refresh_raw
 
 
-@router.post("/refresh-cookie", response_model=AuthOut)
+@router.post("/refresh-cookie", response_model=AuthOut | SessionProbeOut)
 async def refresh_cookie(
     request: Request, response: Response, db: DbDep, kv: KvDep
-) -> AuthOut:
+) -> AuthOut | SessionProbeOut:
     """Rotate the refresh token carried in the ``kh_refresh`` httpOnly cookie.
 
-    Identical semantics to ``POST /auth/refresh`` (same KV keys, same reuse
-    detection); the rotated token is returned in the body AND set as the new
-    cookie (HttpOnly, Secure, SameSite=Lax, path=/api/v1/auth). Absent
-    cookie → 401.
+    With a cookie present: identical semantics to ``POST /auth/refresh``
+    (same KV keys, same reuse detection); the rotated token is returned in
+    the body AND set as the new cookie (HttpOnly, Secure, SameSite=Lax,
+    path=/api/v1/auth).
+
+    Session probe (T14.1): a request carrying NO ``kh_refresh`` cookie at
+    all answers 200 ``{"session": false}`` and sets no cookie — the web
+    boot probes this endpoint whenever no cookie exists, and that expected
+    empty state must not pollute devtools with 401s. A cookie that IS
+    present but invalid/expired/revoked/reused still 401s exactly like the
+    JSON transport.
     """
     await enforce_rate_limit(kv, request, None)
     presented_raw = request.cookies.get(REFRESH_COOKIE_NAME)
     if presented_raw is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing refresh token cookie",
-        )
+        # Probe miss: no cookie, no side effects, no Set-Cookie header.
+        return SessionProbeOut(session=False)
     profile, access, refresh_raw = await _rotate_refresh(kv, db, presented_raw)
     set_refresh_cookie(response, refresh_raw)
     return _auth_out(profile, access, refresh_raw)

@@ -121,10 +121,17 @@ export interface paths {
          * Refresh Cookie
          * @description Rotate the refresh token carried in the ``kh_refresh`` httpOnly cookie.
          *
-         *     Identical semantics to ``POST /auth/refresh`` (same KV keys, same reuse
-         *     detection); the rotated token is returned in the body AND set as the new
-         *     cookie (HttpOnly, Secure, SameSite=Lax, path=/api/v1/auth). Absent
-         *     cookie → 401.
+         *     With a cookie present: identical semantics to ``POST /auth/refresh``
+         *     (same KV keys, same reuse detection); the rotated token is returned in
+         *     the body AND set as the new cookie (HttpOnly, Secure, SameSite=Lax,
+         *     path=/api/v1/auth).
+         *
+         *     Session probe (T14.1): a request carrying NO ``kh_refresh`` cookie at
+         *     all answers 200 ``{"session": false}`` and sets no cookie — the web
+         *     boot probes this endpoint whenever no cookie exists, and that expected
+         *     empty state must not pollute devtools with 401s. A cookie that IS
+         *     present but invalid/expired/revoked/reused still 401s exactly like the
+         *     JSON transport.
          */
         post: operations["refresh_cookie_api_v1_auth_refresh_cookie_post"];
         delete?: never;
@@ -800,6 +807,18 @@ export interface components {
             ym: string;
         };
         /**
+         * SessionProbeOut
+         * @description ``POST /auth/refresh-cookie`` answer when the request carries NO
+         *     ``kh_refresh`` cookie at all: there is no cookie session, so the endpoint
+         *     answers 200 ``{"session": false}`` instead of 401 (keeps browser
+         *     devtools/consoles free of *expected* 401 noise). A cookie that IS present
+         *     but invalid/expired/revoked still 401s like the JSON transport.
+         */
+        SessionProbeOut: {
+            /** Session */
+            session: boolean;
+        };
+        /**
          * UserOut
          * @description Public view of a profile.
          */
@@ -1003,7 +1022,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthOut"];
+                    "application/json": components["schemas"]["AuthOut"] | components["schemas"]["SessionProbeOut"];
                 };
             };
         };

@@ -6,6 +6,10 @@ keys, same reuse-detection family kill); the cookie is ``HttpOnly``,
 ``SameSite=Lax``, ``Path=/api/v1/auth`` and ``Secure`` unless
 ``KHOROCH_REFRESH_COOKIE_SECURE=0`` (tests run plain http, so conftest pins
 it off; a dedicated unit test below proves Secure is on by default).
+
+T14.1: a request with NO ``kh_refresh`` cookie at all is a session *probe*
+and answers 200 ``{"session": false}`` (no cookie set); a present-but-bad
+cookie still 401s exactly like the JSON transport.
 """
 
 from typing import Any
@@ -163,10 +167,43 @@ async def test_logout_cookie_idempotent(client: AsyncClient) -> None:
     assert (await client.post(f"{AUTH}/logout-cookie")).status_code == 204
 
 
-async def test_refresh_cookie_missing_401(client: AsyncClient) -> None:
+async def test_refresh_cookie_no_cookie_probes_session_false(client: AsyncClient) -> None:
+    """No ``kh_refresh`` cookie at all → 200 ``{"session": false}`` (T14.1).
+
+    The web boot probes this endpoint whenever no cookie exists; that
+    expected empty state must answer 200 (never a 401) and must NOT set any
+    cookie nor touch any session state.
+    """
+    client.cookies.jar.clear()  # probe with a genuinely cookie-free jar
     r = await client.post(f"{AUTH}/refresh-cookie")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"session": False}
+    # Probe miss must not install a cookie (no Set-Cookie header at all).
+    assert refresh_cookie_headers(r) == []
+
+
+async def test_refresh_cookie_valid_cookie_returns_authout(client: AsyncClient) -> None:
+    """Valid cookie → 200 AuthOut shape + the rotated cookie set (T14.1)."""
+    pair = await register(client)
+    r = await call_refresh_cookie(client, pair["refreshToken"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert set(body) == {"user", "accessToken", "refreshToken"}
+    assert body["user"]["email"] == "cookie@test.dev"
+    assert body["refreshToken"] != pair["refreshToken"]
+    headers = refresh_cookie_headers(r)
+    assert len(headers) == 1
+    assert cookie_value(headers[0]) == body["refreshToken"]
+
+
+async def test_refresh_cookie_revoked_session_401(client: AsyncClient) -> None:
+    """Cookie whose session was killed (logout) still 401s (T14.1)."""
+    pair = await register(client)
+    set_cookie(client, pair["refreshToken"])
+    assert (await client.post(f"{AUTH}/logout-cookie")).status_code == 204
+    r = await call_refresh_cookie(client, pair["refreshToken"])
     assert r.status_code == 401
-    assert r.json()["detail"] == "Missing refresh token cookie"
+    assert r.json()["detail"] == "Invalid refresh token"
 
 
 async def test_refresh_cookie_unknown_token_401(client: AsyncClient) -> None:

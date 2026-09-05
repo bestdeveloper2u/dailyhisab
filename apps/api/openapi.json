@@ -988,6 +988,20 @@
         "title": "ReportByMonth",
         "type": "object"
       },
+      "SessionProbeOut": {
+        "description": "``POST /auth/refresh-cookie`` answer when the request carries NO\n``kh_refresh`` cookie at all: there is no cookie session, so the endpoint\nanswers 200 ``{\"session\": false}`` instead of 401 (keeps browser\ndevtools/consoles free of *expected* 401 noise). A cookie that IS present\nbut invalid/expired/revoked still 401s like the JSON transport.",
+        "properties": {
+          "session": {
+            "title": "Session",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "title": "SessionProbeOut",
+        "type": "object"
+      },
       "UserOut": {
         "description": "Public view of a profile.",
         "properties": {
@@ -1148,7 +1162,7 @@
   },
   "info": {
     "title": "Daily Hisab API",
-    "version": "0.6.0"
+    "version": "0.10.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1300,14 +1314,22 @@
     },
     "/api/v1/auth/refresh-cookie": {
       "post": {
-        "description": "Rotate the refresh token carried in the ``kh_refresh`` httpOnly cookie.\n\nIdentical semantics to ``POST /auth/refresh`` (same KV keys, same reuse\ndetection); the rotated token is returned in the body AND set as the new\ncookie (HttpOnly, Secure, SameSite=Lax, path=/api/v1/auth). Absent\ncookie \u2192 401.",
+        "description": "Rotate the refresh token carried in the ``kh_refresh`` httpOnly cookie.\n\nWith a cookie present: identical semantics to ``POST /auth/refresh``\n(same KV keys, same reuse detection); the rotated token is returned in\nthe body AND set as the new cookie (HttpOnly, Secure, SameSite=Lax,\npath=/api/v1/auth).\n\nSession probe (T14.1): a request carrying NO ``kh_refresh`` cookie at\nall answers 200 ``{\"session\": false}`` and sets no cookie \u2014 the web\nboot probes this endpoint whenever no cookie exists, and that expected\nempty state must not pollute devtools with 401s. A cookie that IS\npresent but invalid/expired/revoked/reused still 401s exactly like the\nJSON transport.",
         "operationId": "refresh_cookie_api_v1_auth_refresh_cookie_post",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthOut"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionProbeOut"
+                    }
+                  ],
+                  "title": "Response Refresh Cookie Api V1 Auth Refresh Cookie Post"
                 }
               }
             },

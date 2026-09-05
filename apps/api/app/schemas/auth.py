@@ -29,6 +29,16 @@ class AuthOut(BaseModel):
     refresh_token: str = Field(alias="refreshToken")
 
 
+class SessionProbeOut(BaseModel):
+    """``POST /auth/refresh-cookie`` answer when the request carries NO
+    ``kh_refresh`` cookie at all: there is no cookie session, so the endpoint
+    answers 200 ``{"session": false}`` instead of 401 (keeps browser
+    devtools/consoles free of *expected* 401 noise). A cookie that IS present
+    but invalid/expired/revoked still 401s like the JSON transport."""
+
+    session: bool
+
+
 class RegisterIn(BaseModel):
     """POST /auth/register body."""
 
