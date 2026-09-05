@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { formatTaka, toBnDigits } from "@khoroch/core";
 import type { ParsedExpense } from "@khoroch/api-client";
 import { useExpenseMutations, useVoiceParse } from "../lib/queries";
@@ -22,7 +22,11 @@ interface SpeechResult {
   length: number;
 }
 interface SpeechEvent {
+  resultIndex: number;
   results: { length: number; [i: number]: SpeechResult };
+}
+interface SpeechErrorEvent {
+  error: string;
 }
 interface RecognitionLike {
   lang: string;
@@ -32,10 +36,14 @@ interface RecognitionLike {
   stop(): void;
   onresult: ((e: SpeechEvent) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: SpeechErrorEvent) => void) | null;
 }
 type RecognitionCtor = new () => RecognitionLike;
 
+/**
+ * Google-Translate-style dictation: continuous + interim results, so words
+ * appear live while the user speaks. bn-BD rides Chrome's server engine.
+ */
 function getRecognition(): RecognitionLike | null {
   if (typeof window === "undefined") return null;
   const w = window as unknown as {
@@ -47,8 +55,8 @@ function getRecognition(): RecognitionLike | null {
   try {
     const rec = new Ctor();
     rec.lang = "bn-BD";
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = true;
+    rec.interimResults = true;
     return rec;
   } catch {
     return null;
@@ -71,10 +79,17 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   const [listening, setListening] = useState(false);
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const recRef = useRef<RecognitionLike | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Dictation session refs — survive recognition restarts (onend→start).
+  const baseTextRef = useRef("");
+  const finalRef = useRef("");
+  const wantListenRef = useRef(false);
+  const fatalRef = useRef(false);
+  const restartsRef = useRef(0);
 
-  const micSupported = getRecognition() !== null;
+  const micSupported = useMemo(() => getRecognition() !== null, []);
   const pending = parse.isPending || bulkCreate.isPending;
 
   function reset() {
@@ -83,30 +98,100 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     setConfidence(null);
     setSavedCount(null);
     setError(null);
+    setNote(null);
   }
 
   function handleClose() {
+    wantListenRef.current = false;
     recRef.current?.stop();
     reset();
     onClose();
+  }
+
+  /** Compose textarea = base text + committed finals + live interim. */
+  function renderTranscript(interim: string) {
+    const parts = [baseTextRef.current, finalRef.current.trim(), interim.trim()];
+    setText(parts.filter(Boolean).join(" "));
   }
 
   function startListening() {
     const rec = getRecognition();
     if (!rec) return;
     recRef.current = rec;
+    baseTextRef.current = text.trim();
+    finalRef.current = "";
+    wantListenRef.current = true;
+    fatalRef.current = false;
+    restartsRef.current = 0;
     setListening(true);
     setError(null);
+    setNote(null);
     rec.onresult = (e: SpeechEvent) => {
-      const said = e.results?.[0]?.[0]?.transcript ?? "";
-      if (said) setText((prev) => (prev ? `${prev} ${said}` : said));
+      let interim = "";
+      for (let i = e.resultIndex ?? 0; i < e.results.length; i++) {
+        const r = e.results[i];
+        const said = r?.[0]?.transcript ?? "";
+        if (!said) continue;
+        if (r.isFinal) {
+          finalRef.current = finalRef.current
+            ? `${finalRef.current} ${said}`
+            : said;
+        } else {
+          interim += said;
+        }
+      }
+      renderTranscript(interim);
     };
-    rec.onerror = () => setListening(false);
-    rec.onend = () => setListening(false);
-    rec.start();
+    rec.onerror = (e: SpeechErrorEvent) => {
+      switch (e.error) {
+        case "aborted":
+          break; // stop() was pressed — silence is correct
+        case "no-speech":
+          setNote(w(lang, "voiceNoSpeech"));
+          break; // not fatal — onend will restart the mic
+        case "not-allowed":
+        case "service-not-allowed":
+          fatalRef.current = true;
+          setError(w(lang, "voiceMicPerm"));
+          break;
+        case "audio-capture":
+          fatalRef.current = true;
+          setError(w(lang, "voiceMicMissing"));
+          break;
+        case "network":
+          fatalRef.current = true;
+          setError(w(lang, "voiceNetErr"));
+          break;
+        default:
+          fatalRef.current = true;
+          setError(w(lang, "errFallback"));
+      }
+    };
+    rec.onend = () => {
+      setListening(false);
+      // Google-Translate feel: keep the mic alive across pauses until the
+      // user presses stop or a fatal error occurred.
+      if (wantListenRef.current && !fatalRef.current && restartsRef.current < 30) {
+        restartsRef.current += 1;
+        try {
+          rec.start();
+          setListening(true);
+        } catch {
+          // start() throws if the engine is still winding down — onend fires
+          // again and we retry on the next tick.
+        }
+      }
+    };
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+      setError(w(lang, "errFallback"));
+    }
   }
 
   function stopListening() {
+    wantListenRef.current = false;
     recRef.current?.stop();
     setListening(false);
   }
@@ -218,6 +303,11 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
               {w(lang, "listening")}…
             </p>
           )}
+          {note && !listening && !error && (
+            <p className="text-xs text-muted" role="status">
+              {note}
+            </p>
+          )}
           {!micSupported && (
             <p className="text-xs text-muted">{w(lang, "voiceUnsupported")}</p>
           )}
@@ -230,12 +320,19 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
           <textarea
             id="voice-text"
             ref={textAreaRef}
-            rows={2}
+            rows={3}
             value={text}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
             placeholder={w(lang, "voicePh")}
             className="w-full resize-none rounded-control border border-line bg-ivory px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-emerald focus:outline-none"
           />
+          {listening && (
+            <p className="text-[11px] text-muted">
+              {lang === "bn"
+                ? "বলতে থাকুন — লেখা এখনই এখানে আসবে। শেষ হলে মাইক বন্ধ করুন।"
+                : "Keep speaking — words appear here live. Press the mic to finish."}
+            </p>
+          )}
         </div>
 
         {items === null && (

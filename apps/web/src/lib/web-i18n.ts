@@ -51,6 +51,11 @@ export const W = {
     txCount: "লেনদেন",
     noBudget: "বাজেট সেট করা নেই",
     viewAll: "সব দেখুন",
+    // voice — speech error guidance (owner: "too many issues", silent failures)
+    voiceMicPerm: "মাইক্রোফোনের অনুমতি দিন — ব্রাউজারের ঠিকানার পাশে মাইক আইকন থেকে অনুমতি চালু করুন",
+    voiceMicMissing: "মাইক্রোফোন পাওয়া যাচ্ছে না — ডিভাইসে মাইক যুক্ত আছে কি না দেখুন",
+    voiceNetErr: "স্পিচ সার্ভিসে পৌঁছানো যাচ্ছে না — ইন্টারনেট সংযোগ দেখুন",
+    voiceNoSpeech: "কিছু শোনা যায়নি — মাইক চেপে আবার বলুন",
     // form
     addTitle: "খরচ যোগ করুন",
     editTitle: "খরচ সম্পাদনা",
@@ -212,6 +217,11 @@ export const W = {
     txCount: "Transactions",
     noBudget: "No budget set",
     viewAll: "View all",
+    // voice — speech error guidance (owner: "too many issues", silent failures)
+    voiceMicPerm: "Allow microphone access — use the mic icon next to the browser address bar",
+    voiceMicMissing: "No microphone found — check that a mic is connected",
+    voiceNetErr: "Speech service unreachable — check your internet connection",
+    voiceNoSpeech: "Didn't hear anything — press the mic and say it again",
     // form
     addTitle: "Add expense",
     editTitle: "Edit expense",
