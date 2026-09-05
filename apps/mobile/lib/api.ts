@@ -254,6 +254,58 @@ export async function createExpense(
   });
 }
 
+// --- Voice parse + bulk create (Phase 4, T15.2) -------------------------------
+
+/** One expense candidate from POST /voice/parse (schema: ParsedItem). */
+export interface ParsedExpense {
+  cat: string;
+  grp: ExpenseGroup;
+  /** Decimal string "40.00" — never a JSON number (ADR-0004 §1). */
+  amt: string;
+  /** Serialized as explicit null when the transcript didn't name a method. */
+  pay?: PayMethod | null;
+  desc?: string | null;
+  /** "YYYY-MM-DD", or null → caller defaults to today. */
+  iso?: string | null;
+}
+
+/** POST /voice/parse response: the candidates plus an overall 0..1 confidence. */
+export interface VoiceParseResult {
+  items: ParsedExpense[];
+  confidence: number;
+}
+
+/**
+ * POST /api/v1/voice/parse (Bearer access) → 200 candidates; 422 empty text.
+ * Rule-based parser — READ-ONLY (no rows are created here).
+ */
+export async function voiceParse(
+  accessToken: string,
+  text: string,
+): Promise<VoiceParseResult> {
+  return request<VoiceParseResult>("/api/v1/voice/parse", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/**
+ * POST /api/v1/expenses/bulk (Bearer access) → 201 stored rows; 422
+ * validation. Accepts up to 50 items in a single flush (voice multi-insert).
+ */
+export async function createExpensesBulk(
+  accessToken: string,
+  items: ExpenseCreateInput[],
+): Promise<Expense[]> {
+  const out = await request<{ items: Expense[] }>("/api/v1/expenses/bulk", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return out.items;
+}
+
 // --- Dashboard report (Phase 3, ADR-0004) ------------------------------------
 
 /**

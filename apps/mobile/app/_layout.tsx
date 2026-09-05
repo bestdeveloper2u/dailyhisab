@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "../lib/auth";
 import { ErrorBoundary } from "../lib/ErrorBoundary";
 import { PrefsProvider, usePrefs } from "../lib/prefs";
 import { theme } from "../lib/theme";
+import { ToastProvider } from "../lib/toast";
 
 function RootNavigator() {
   const { loading } = useAuth();
@@ -39,11 +40,14 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <PrefsProvider>
-        {/* T13.2: inside the providers so the fallback can use theme tokens
-            and the active language; wraps the whole screen tree below. */}
-        <ErrorBoundary>
-          <RootNavigator />
-        </ErrorBoundary>
+        {/* T15.2: ToastProvider lives inside PrefsProvider (the pill uses the
+            active palette) and wraps everything below so every screen — and
+            the error fallback — can call useToast(). */}
+        <ToastProvider>
+          <ErrorBoundary>
+            <RootNavigator />
+          </ErrorBoundary>
+        </ToastProvider>
       </PrefsProvider>
     </AuthProvider>
   );

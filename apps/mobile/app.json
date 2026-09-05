@@ -14,8 +14,26 @@
     ],
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "কথা বলে খরচ যোগ করতে মাইক্রোফোন ব্যবহার করা হয়।",
+          "speechRecognitionPermission": "আপনার বলা খরচ বুঝে নিতে স্পিচ রিকগনিশন ব্যবহার করা হয়।"
+        }
+      ]
     ],
+    "ios": {
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "কথা বলে খরচ যোগ করতে মাইক্রোফোন ব্যবহার করা হয়।",
+        "NSSpeechRecognitionUsageDescription": "আপনার বলা খরচ বুঝে নিতে স্পিচ রিকগনিশন ব্যবহার করা হয়।"
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
     "experiments": {
       "typedRoutes": false
     }

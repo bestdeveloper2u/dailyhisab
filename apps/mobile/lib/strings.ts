@@ -171,6 +171,31 @@ export const STRINGS = {
     voiceLangValue: "বাংলা (bn-BD)",
     version: "ভার্সন",
     logout: "লগ আউট",
+
+    // Voice entry (T15.2 — prototype addscreen mic/overlay parity)
+    addSub: "ম্যানুয়ালি লিখুন — অথবা নিচের মাইকে চেপে বলুন",
+    voiceUnavailable: "ভয়েস এই বিল্ডে নেই — ডেভেলপমেন্ট বিল্ড প্রয়োজন",
+    voiceHoldHint: "মাইকে চেপে ধরে বলুন — যেমন “চায়ে ৪০ টাকা, রিকশায় ৫০ টাকা”",
+    voiceListening: "শুনছি…",
+    voiceHeard: "আপনি বলেছেন",
+    voiceParsing: "খরচ বুঝে নিচ্ছি…",
+    voiceNoItems: "কোনো খরচ বোঝা যায়নি — আবার বলুন।",
+    voiceSaveAll: "সব সংরক্ষণ",
+    voiceErr: "ভয়েসে খরচ যোগ করা যায়নি।",
+    voicePermDenied: "মাইক্রোফোনের অনুমতি ছাড়া ভয়েস চলবে না।",
+
+    // Toasts (T15.2 — global themed pill, bn/en via prefs)
+    toastExpenseAdded: "খরচ যোগ হয়েছে ✓",
+    toastExpenseUpdated: "খরচ আপডেট হয়েছে ✓",
+    toastExpenseDeleted: "খরচ মুছে ফেলা হয়েছে ✓",
+    toastDebtAdded: "ধার যোগ হয়েছে ✓",
+    toastDebtPaid: "পরিশোধ হয়েছে ✓",
+    toastDebtDeleted: "ধার মুছে ফেলা হয়েছে ✓",
+    toastBudgetSaved: "বাজেট সংরক্ষিত ✓",
+    toastCsvDone: "CSV ডাউনলোড হয়েছে ✓",
+    toastCsvFailed: "CSV ডাউনলোড করা যায়নি",
+    toastVoiceSaved: "ভয়েস থেকে খরচ সংরক্ষিত ✓",
+    toastVoiceFailed: "ভয়েস থেকে সংরক্ষণ করা যায়নি",
   },
   en: {
     account: "Account",
@@ -338,6 +363,31 @@ export const STRINGS = {
     voiceLangValue: "বাংলা (bn-BD)",
     version: "Version",
     logout: "Log out",
+
+    // Voice entry (T15.2 — prototype addscreen mic/overlay parity)
+    addSub: "Type it in — or press the mic below and speak",
+    voiceUnavailable: "Voice needs a development build",
+    voiceHoldHint: "Hold the mic and speak — e.g. “tea 40 taka, rickshaw 50 taka”",
+    voiceListening: "Listening…",
+    voiceHeard: "You said",
+    voiceParsing: "Working out the expenses…",
+    voiceNoItems: "Couldn't catch any expense — try again.",
+    voiceSaveAll: "Save all",
+    voiceErr: "Couldn't add expenses by voice.",
+    voicePermDenied: "Voice needs microphone permission.",
+
+    // Toasts (T15.2 — global themed pill, bn/en via prefs)
+    toastExpenseAdded: "Expense added ✓",
+    toastExpenseUpdated: "Expense updated ✓",
+    toastExpenseDeleted: "Expense deleted ✓",
+    toastDebtAdded: "Debt added ✓",
+    toastDebtPaid: "Payment saved ✓",
+    toastDebtDeleted: "Debt deleted ✓",
+    toastBudgetSaved: "Budget saved ✓",
+    toastCsvDone: "CSV downloaded ✓",
+    toastCsvFailed: "CSV download failed",
+    toastVoiceSaved: "Expenses saved from voice ✓",
+    toastVoiceFailed: "Couldn't save from voice",
   },
 } as const;
 

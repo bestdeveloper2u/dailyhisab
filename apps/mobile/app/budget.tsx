@@ -1,6 +1,6 @@
-import { formatTaka, moneyFromNumber, t } from "@khoroch/core";
+import { formatTaka, moneyFromNumber, t as tCore } from "@khoroch/core";
 import { Redirect, router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -21,8 +21,10 @@ import {
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
 import { useAuth } from "../lib/auth";
+import { usePrefs } from "../lib/prefs";
 import { STRINGS } from "../lib/strings";
 import { theme } from "../lib/theme";
+import { useToast } from "../lib/toast";
 
 /** ^\d+([.]\d{1,2})?$ — mirrors the API's numeric(12,2) domain. */
 const AMOUNT_RE = /^\d+([.]\d{1,2})?$/;
@@ -71,6 +73,8 @@ function usageStatus(rawPct: number): string {
  */
 export default function BudgetScreen() {
   const auth = useAuth();
+  const { t } = usePrefs();
+  const toast = useToast();
 
   const [ym, setYm] = useState(currentYm);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -82,8 +86,6 @@ export default function BudgetScreen() {
   const [limitText, setLimitText] = useState("");
   const [limitPending, setLimitPending] = useState(false);
   const [limitError, setLimitError] = useState<string | null>(null);
-  const [savedNote, setSavedNote] = useState<string | null>(null);
-  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Inline per-category limit edit.
   const [editingCat, setEditingCat] = useState<string | null>(null);
@@ -94,18 +96,11 @@ export default function BudgetScreen() {
   // Guard against out-of-order responses (focus racing month flips).
   const seq = useRef(0);
 
+  // Save feedback (T15.2): both the monthly-limit and per-category save
+  // paths land here — one themed toast replaces the old inline flash note.
   const flashSaved = useCallback(() => {
-    if (noteTimer.current !== null) clearTimeout(noteTimer.current);
-    setSavedNote(STRINGS.bn.budgetSaved);
-    noteTimer.current = setTimeout(() => setSavedNote(null), 2500);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (noteTimer.current !== null) clearTimeout(noteTimer.current);
-    },
-    [],
-  );
+    toast(t("toastBudgetSaved"));
+  }, [t, toast]);
 
   const load = useCallback(
     async (month: string, viaPull: boolean) => {
@@ -299,7 +294,9 @@ export default function BudgetScreen() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.usageAmt}>{formatTaka(spent, "bn")}</Text>
+              <Text style={styles.usageAmt} numberOfLines={1}>
+                {formatTaka(spent, "bn")}
+              </Text>
               <View style={styles.barTrack}>
                 <View
                   style={[
@@ -346,9 +343,6 @@ export default function BudgetScreen() {
               )}
               {limitError !== null && (
                 <Text style={styles.hintError}>{limitError}</Text>
-              )}
-              {savedNote !== null && (
-                <Text style={styles.savedNote}>{savedNote}</Text>
               )}
             </View>
 
@@ -460,9 +454,9 @@ export default function BudgetScreen() {
           ]}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel={t("bn", "navDashboard")}
+          accessibilityLabel={tCore("bn", "navDashboard")}
         >
-          <Text style={styles.backLabel}>← {t("bn", "navDashboard")}</Text>
+          <Text style={styles.backLabel}>← {tCore("bn", "navDashboard")}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -626,12 +620,6 @@ const styles = StyleSheet.create({
   hintError: {
     color: theme.colors.danger,
     fontSize: 13,
-  },
-  savedNote: {
-    color: theme.colors.emerald,
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "center",
   },
   catRow: {
     borderTopWidth: StyleSheet.hairlineWidth,

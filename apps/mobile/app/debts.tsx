@@ -1,4 +1,4 @@
-import { moneyFromNumber, t } from "@khoroch/core";
+import { moneyFromNumber, t as tCore } from "@khoroch/core";
 import { Redirect, router, useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -23,8 +23,10 @@ import {
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
 import { useAuth } from "../lib/auth";
+import { usePrefs } from "../lib/prefs";
 import { STRINGS } from "../lib/strings";
 import { theme } from "../lib/theme";
+import { useToast } from "../lib/toast";
 
 const PAGE_SIZE = 20;
 
@@ -63,6 +65,8 @@ const DIRS: { key: DebtDir; label: string }[] = [
  */
 export default function Debts() {
   const auth = useAuth();
+  const { t } = usePrefs();
+  const toast = useToast();
 
   const [status, setStatus] = useState<DebtStatusFilter>("open");
   const [items, setItems] = useState<Debt[]>([]);
@@ -164,6 +168,25 @@ export default function Debts() {
   const canSubmit = validParty && validAmount && validIso && validNote && !pending;
   const canPay = AMOUNT_RE.test(normalizedPay) && Number(normalizedPay) > 0 && !payPending;
 
+  // Party autocomplete (T15.2 — prototype datalist parity, www/index.html:829):
+  // distinct prior parties from the already-loaded debts, case-insensitive
+  // prefix/includes match against what's typed, capped at 5 chips; a tap
+  // fills the party field. Shown only while the query is non-empty.
+  const partyQuery = party.trim().toLowerCase();
+  const partySuggestions: string[] = [];
+  if (partyQuery.length > 0) {
+    const seen = new Set<string>();
+    for (const debt of items) {
+      const key = debt.party.toLowerCase();
+      if (key === partyQuery || seen.has(key)) continue;
+      seen.add(key);
+      if (key.startsWith(partyQuery) || key.includes(partyQuery)) {
+        partySuggestions.push(debt.party);
+        if (partySuggestions.length === 5) break;
+      }
+    }
+  }
+
   async function handleCreate() {
     const token = auth.accessToken;
     if (!canSubmit || !token) return;
@@ -184,6 +207,7 @@ export default function Debts() {
       setIso(todayIso());
       setShowAdd(false);
       setPayResult(null);
+      toast(t("toastDebtAdded"));
       await loadFirstPage(status, false);
     } catch (err) {
       setFormError(describeApiError(err));
@@ -210,6 +234,7 @@ export default function Debts() {
       );
       setPayId(null);
       setPayAmt("");
+      toast(t("toastDebtPaid"));
       // FULL removes the row from ?status=open; just refetch the current view.
       await loadFirstPage(status, false);
     } catch (err) {
@@ -225,7 +250,7 @@ export default function Debts() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.header}>
-        <Text style={styles.brand}>{t("bn", "appName")}</Text>
+        <Text style={styles.brand}>{tCore("bn", "appName")}</Text>
         <Text style={styles.title}>{STRINGS.bn.debtsTitle}</Text>
         <View style={styles.chipRow}>
           {STATUS_FILTERS.map((f) => (
@@ -277,7 +302,9 @@ export default function Debts() {
         ListHeaderComponent={
           <View style={styles.topArea}>
             {payResult !== null && (
-              <Text style={styles.payResultNote}>{payResult}</Text>
+              <Text style={styles.payResultNote} numberOfLines={1}>
+                {payResult}
+              </Text>
             )}
             <Pressable
               style={({ pressed }) => [
@@ -305,6 +332,20 @@ export default function Debts() {
                   editable={!pending}
                   maxLength={120}
                 />
+
+                {partySuggestions.length > 0 && (
+                  <View style={styles.suggestRow}>
+                    {partySuggestions.map((name) => (
+                      <Chip
+                        key={name}
+                        label={name}
+                        selected={false}
+                        disabled={pending}
+                        onPress={() => setParty(name)}
+                      />
+                    ))}
+                  </View>
+                )}
 
                 <Text style={styles.label}>{STRINGS.bn.dirLabel}</Text>
                 <View style={styles.chipRow}>
@@ -439,9 +480,9 @@ export default function Debts() {
               ]}
               onPress={() => router.back()}
               accessibilityRole="button"
-              accessibilityLabel={t("bn", "navDashboard")}
+              accessibilityLabel={tCore("bn", "navDashboard")}
             >
-              <Text style={styles.backLabel}>← {t("bn", "navDashboard")}</Text>
+              <Text style={styles.backLabel}>← {tCore("bn", "navDashboard")}</Text>
             </Pressable>
           </>
         }
@@ -478,7 +519,10 @@ function Chip({
       accessibilityRole="button"
       accessibilityState={{ selected }}
     >
-      <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
+      <Text
+        style={[styles.chipLabel, selected && styles.chipLabelSelected]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
     </Pressable>
@@ -639,6 +683,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: theme.spacing.sm,
     justifyContent: "center",
+  },
+  suggestRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
   },
   list: {
     flex: 1,

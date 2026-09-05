@@ -24,8 +24,10 @@ import * as Sharing from "expo-sharing";
 import { exportExpensesCsvUrl, listExpenses, type Expense } from "../lib/api";
 import { describeApiError } from "../lib/errors";
 import { useAuth } from "../lib/auth";
+import { usePrefs } from "../lib/prefs";
 import { MONTH_LABELS, STRINGS } from "../lib/strings";
 import { theme } from "../lib/theme";
+import { useToast } from "../lib/toast";
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 350;
@@ -71,6 +73,8 @@ function monthKeysOf(items: Expense[]): string[] {
 
 export default function ExpenseList() {
   const auth = useAuth();
+  const { t } = usePrefs();
+  const toast = useToast();
 
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
@@ -85,7 +89,6 @@ export default function ExpenseList() {
   const [moreError, setMoreError] = useState<string | null>(null);
 
   const [exporting, setExporting] = useState(false);
-  const [exportNote, setExportNote] = useState<string | null>(null);
 
   // Guard against out-of-order responses (debounced search racing focus/pull).
   const seq = useRef(0);
@@ -156,14 +159,13 @@ export default function ExpenseList() {
 
   /**
    * CSV export (prototype csvBtn): native download with the Bearer header,
-   * then the OS share sheet. Any failure degrades to an inline bn hint —
-   * the screen must never crash on export.
+   * then the OS share sheet; the terminal states surface as themed toasts
+   * (T15.2). The screen must never crash on export.
    */
   const handleExportCsv = useCallback(async () => {
     const token = auth.accessToken;
     if (!token || exporting) return;
     setExporting(true);
-    setExportNote(null);
     try {
       const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
       if (dir === null) throw new Error("no-cache-directory");
@@ -181,13 +183,13 @@ export default function ExpenseList() {
         dialogTitle: STRINGS.bn.listTitle,
         UTI: "public.comma-separated-values-text",
       });
-      setExportNote(STRINGS.bn.csvDone);
+      toast(t("toastCsvDone"));
     } catch {
-      setExportNote(STRINGS.bn.csvShareFailed);
+      toast(t("toastCsvFailed"), "error");
     } finally {
       setExporting(false);
     }
-  }, [auth.accessToken, exporting]);
+  }, [auth.accessToken, exporting, t, toast]);
 
   if (!auth.user) {
     return <Redirect href="/login" />;
@@ -293,11 +295,6 @@ export default function ExpenseList() {
                 </Text>
               </Pressable>
             </View>
-            {exportNote !== null && (
-              <Text style={styles.exportNote} numberOfLines={2}>
-                {exportNote}
-              </Text>
-            )}
             {error === null && !initialLoading && (
               <View style={styles.dayHead}>
                 <Text style={styles.dayHeadCount} numberOfLines={1}>
@@ -502,10 +499,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
-  },
-  exportNote: {
-    color: theme.colors.muted,
-    fontSize: 12,
   },
   dayHead: {
     flexDirection: "row",

@@ -1,8 +1,9 @@
-import { moneyFromNumber, t } from "@khoroch/core";
+import { moneyFromNumber, t as tCore } from "@khoroch/core";
 import { Redirect, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,18 +13,41 @@ import {
   View,
 } from "react-native";
 
-import { createExpense, type ExpenseGroup, type PayMethod } from "../lib/api";
+import {
+  ApiError,
+  createExpense,
+  createExpensesBulk,
+  voiceParse,
+  type ExpenseCreateInput,
+  type ExpenseGroup,
+  type ParsedExpense,
+  type PayMethod,
+} from "../lib/api";
 import { describeApiError } from "../lib/errors";
 import { useAuth } from "../lib/auth";
+import { usePrefs } from "../lib/prefs";
 import { GROUP_LABELS, PAY_LABELS, STRINGS } from "../lib/strings";
 import { theme } from "../lib/theme";
+import { useToast } from "../lib/toast";
+import {
+  loadSpeechModule,
+  startVoiceSession,
+  VOICE_PERMISSION_ERRORS,
+  type VoiceSession,
+} from "../lib/voice";
 
 const GROUPS = Object.keys(GROUP_LABELS) as ExpenseGroup[];
 const PAY_METHODS = Object.keys(PAY_LABELS) as PayMethod[];
 
-/** ^\d+([.]\d{1,2})?$ — mirrors the API's numeric(12,2) domain. */
+/** ^\d+([.]\\d{1,2})?$ — mirrors the API's numeric(12,2) domain. */
 const AMOUNT_RE = /^\d+([.]\d{1,2})?$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Prototype parity: voice input is Bengali (settings "ভয়েস ভাষা: বাংলা"). */
+const VOICE_LOCALE = "bn-BD";
+
+/** Mic-button states: idle → listening → parsing → confirm sheet. */
+type VoicePhase = "idle" | "listening" | "parsing" | "confirm";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -35,10 +59,14 @@ function isValidIso(value: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 
-/** Add-expense screen wired to POST /api/v1/expenses (Bearer from AuthProvider). */
+/** Add-expense screen wired to POST /api/v1/expenses (Bearer from AuthProvider).
+ *  T15.2 adds prototype voice parity: hold the mic, speak bn-BD, POST the
+ *  transcript to /voice/parse, confirm the candidates, bulk-create them. */
 export default function AddExpense() {
   const auth = useAuth();
   const router = useRouter();
+  const { t } = usePrefs();
+  const toast = useToast();
 
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState("");
@@ -49,6 +77,144 @@ export default function AddExpense() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Voice entry (T15.2) ----------------------------------------------------
+  // null = probe still running; false = Expo Go / no dev build → show the
+  // bn/en hint chip; the manual flow is completely unaffected either way.
+  const [voiceSupported, setVoiceSupported] = useState<boolean | null>(null);
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>("idle");
+  const [voicePartial, setVoicePartial] = useState("");
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceCandidates, setVoiceCandidates] = useState<ParsedExpense[]>([]);
+  // Editable per-candidate amounts shown in the confirm sheet.
+  const [voiceAmounts, setVoiceAmounts] = useState<string[]>([]);
+  const [voiceSaving, setVoiceSaving] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const voiceSession = useRef<VoiceSession | null>(null);
+
+  useEffect(() => {
+    void loadSpeechModule().then((mod) => setVoiceSupported(mod !== null));
+  }, []);
+
+  function resetVoiceSheet() {
+    setVoicePhase("idle");
+    setVoiceCandidates([]);
+    setVoiceAmounts([]);
+    setVoicePartial("");
+  }
+
+  /** Final transcript → POST /voice/parse → confirm sheet (or inline hint). */
+  async function handleVoiceFinal(text: string) {
+    const token = auth.accessToken;
+    const trimmed = text.trim();
+    if (trimmed.length === 0 || token === null) {
+      setVoicePhase("idle");
+      return;
+    }
+    setVoicePartial("");
+    setVoiceTranscript(trimmed);
+    setVoicePhase("parsing");
+    try {
+      const parsed = await voiceParse(token, trimmed);
+      if (parsed.items.length === 0) {
+        setVoiceError(t("voiceNoItems"));
+        setVoicePhase("idle");
+        return;
+      }
+      setVoiceCandidates(parsed.items);
+      setVoiceAmounts(parsed.items.map((item) => String(Number(item.amt))));
+      setVoicePhase("confirm");
+    } catch (err) {
+      setVoiceError(describeApiError(err));
+      setVoicePhase("idle");
+    }
+  }
+
+  /** onPressIn — start the bn-BD recognizer (hold-to-record). */
+  async function beginVoice() {
+    if (voicePhase !== "idle" || pending) return;
+    setVoiceError(null);
+    setVoicePartial("");
+    const session = await startVoiceSession(VOICE_LOCALE, {
+      onPartial: (text) => setVoicePartial(text),
+      onFinal: (text) => void handleVoiceFinal(text),
+      onError: (code) => {
+        setVoicePhase("idle");
+        setVoicePartial("");
+        if (code === "no-speech") {
+          // Released without a word — not worth an error line, just reset.
+          return;
+        }
+        setVoiceError(
+          VOICE_PERMISSION_ERRORS.has(code)
+            ? t("voicePermDenied")
+            : t("voiceErr"),
+        );
+      },
+    });
+    if (session !== null) {
+      voiceSession.current = session;
+      setVoicePhase("listening");
+    }
+  }
+
+  /** onPressOut — release the mic; the final transcript lands via onFinal. */
+  function endVoice() {
+    voiceSession.current?.stop();
+    voiceSession.current = null;
+  }
+
+  /** Confirm sheet → bulk create (single-create fallback for older APIs). */
+  async function confirmVoice() {
+    const token = auth.accessToken;
+    if (voiceSaving || token === null) return;
+    const rows: ExpenseCreateInput[] = [];
+    voiceCandidates.forEach((item, idx) => {
+      const raw = (voiceAmounts[idx] ?? "").trim().replace(/^৳\s*/, "");
+      const parsedAmt = Number(item.amt);
+      const amt = AMOUNT_RE.test(raw) && Number(raw) > 0 ? Number(raw) : parsedAmt;
+      if (!(amt > 0)) return; // skip a candidate whose amount went bad
+      const trimmedCat = item.cat.trim();
+      if (trimmedCat.length === 0) return;
+      rows.push({
+        cat: trimmedCat,
+        grp: item.grp,
+        amt: moneyFromNumber(amt), // 40 → "40.00"
+        iso: item.iso ?? todayIso(),
+        pay: item.pay ?? "cash",
+        desc: item.desc ?? null,
+      });
+    });
+    if (rows.length === 0) {
+      setVoiceError(t("voiceNoItems"));
+      resetVoiceSheet();
+      return;
+    }
+    setVoiceSaving(true);
+    try {
+      try {
+        await createExpensesBulk(token, rows);
+      } catch (err) {
+        // Older API builds without /expenses/bulk → loop single creates.
+        if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+          for (const row of rows) {
+            await createExpense(token, row);
+          }
+        } else {
+          throw err;
+        }
+      }
+      resetVoiceSheet();
+      setVoiceTranscript("");
+      toast(t("toastVoiceSaved"));
+      router.back(); // list/dashboard reload on focus
+    } catch (err) {
+      setVoiceError(describeApiError(err));
+      resetVoiceSheet();
+    } finally {
+      setVoiceSaving(false);
+    }
+  }
+
   if (!auth.user) {
     return <Redirect href="/login" />;
   }
@@ -58,6 +224,14 @@ export default function AddExpense() {
   const validCat = cat.trim().length > 0;
   const validIso = isValidIso(iso.trim());
   const canSubmit = validAmount && validCat && validIso && !pending;
+  const voiceCanSave = voiceCandidates.length > 0 && !voiceSaving;
+
+  function cancelVoiceSheet() {
+    if (voiceSaving) return;
+    resetVoiceSheet();
+    setVoiceTranscript("");
+    setVoiceError(null);
+  }
 
   async function handleSubmit() {
     const token = auth.accessToken;
@@ -74,6 +248,7 @@ export default function AddExpense() {
         pay,
         desc: trimmedDesc.length > 0 ? trimmedDesc : null,
       });
+      toast(t("toastExpenseAdded"));
       router.back(); // list reloads on focus
     } catch (err) {
       setError(describeApiError(err));
@@ -93,6 +268,16 @@ export default function AddExpense() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.title}>{STRINGS.bn.addTitle}</Text>
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {t("addSub")}
+        </Text>
+        {voiceSupported === false && (
+          <View style={styles.voiceChip} accessibilityRole="text">
+            <Text style={styles.voiceChipLabel} numberOfLines={1}>
+              🎙 {t("voiceUnavailable")}
+            </Text>
+          </View>
+        )}
 
         <View style={styles.form}>
           <Text style={styles.label}>{STRINGS.bn.amount}</Text>
@@ -180,6 +365,44 @@ export default function AddExpense() {
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
         </View>
 
+        {/* Voice entry (T15.2 — prototype mic parity): hold to record. */}
+        {voiceSupported !== false && (
+          <View style={styles.voiceArea}>
+            {voiceError !== null && (
+              <Text style={styles.voiceError} numberOfLines={2}>
+                {voiceError}
+              </Text>
+            )}
+            <Pressable
+              style={({ pressed }) => [
+                styles.micButton,
+                voicePhase === "listening" && styles.micButtonActive,
+                pressed && voicePhase === "idle" && styles.micButtonPressed,
+              ]}
+              onPressIn={() => void beginVoice()}
+              onPressOut={endVoice}
+              disabled={pending || voicePhase === "parsing" || voicePhase === "confirm"}
+              accessibilityRole="button"
+              accessibilityLabel={t("voiceHoldHint")}
+              accessibilityState={{ busy: voicePhase === "listening" }}
+            >
+              <Text style={styles.micIcon}>🎙</Text>
+            </Pressable>
+            <Text style={styles.voiceCaption} numberOfLines={1}>
+              {voicePhase === "listening"
+                ? t("voiceListening")
+                : voicePhase === "parsing"
+                  ? t("voiceParsing")
+                  : t("voiceHoldHint")}
+            </Text>
+            {voicePartial.length > 0 && (
+              <Text style={styles.voicePartial} numberOfLines={1}>
+                “{voicePartial}”
+              </Text>
+            )}
+          </View>
+        )}
+
         <Pressable
           style={({ pressed }) => [
             styles.backButton,
@@ -188,11 +411,82 @@ export default function AddExpense() {
           onPress={() => router.back()}
           disabled={pending}
           accessibilityRole="button"
-          accessibilityLabel={t("bn", "navDashboard")}
+          accessibilityLabel={tCore("bn", "navDashboard")}
         >
-          <Text style={styles.backLabel}>{t("bn", "navDashboard")}</Text>
+          <Text style={styles.backLabel}>{tCore("bn", "navDashboard")}</Text>
         </Pressable>
       </ScrollView>
+
+      {/* Voice confirm sheet (T15.2 — prototype vpConfirm parity): parsed
+          candidates with editable amounts before the bulk create. */}
+      <Modal
+        visible={voicePhase === "confirm"}
+        animationType="slide"
+        transparent
+        onRequestClose={cancelVoiceSheet}
+      >
+        <View style={styles.sheetHost}>
+          <View style={styles.scrim} />
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>{t("voiceHeard")}</Text>
+            <Text style={styles.sheetTranscript} numberOfLines={2}>
+              “{voiceTranscript}”
+            </Text>
+            <Text style={styles.sheetLabel}>{STRINGS.bn.amount}</Text>
+            <View style={styles.sheetRows}>
+              {voiceCandidates.map((item, idx) => (
+                <View style={styles.sheetRow} key={`${item.cat}-${idx}`}>
+                  <Text style={styles.sheetCat} numberOfLines={1}>
+                    {item.cat} · {GROUP_LABELS[item.grp] ?? item.grp}
+                  </Text>
+                  <TextInput
+                    style={styles.sheetInput}
+                    value={voiceAmounts[idx] ?? ""}
+                    onChangeText={(next) =>
+                      setVoiceAmounts((prev) =>
+                        prev.map((value, i) => (i === idx ? next : value)),
+                      )
+                    }
+                    keyboardType="decimal-pad"
+                    placeholder={STRINGS.bn.amountPlaceholder}
+                    placeholderTextColor={theme.colors.muted}
+                    editable={!voiceSaving}
+                  />
+                </View>
+              ))}
+            </View>
+            <View style={styles.sheetActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.sheetCancel,
+                  pressed && styles.sheetCancelPressed,
+                ]}
+                onPress={cancelVoiceSheet}
+                disabled={voiceSaving}
+                accessibilityRole="button"
+                accessibilityLabel={t("cancel")}
+              >
+                <Text style={styles.sheetCancelLabel}>{t("cancel")}</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.sheetSave,
+                  (!voiceCanSave || pressed) && styles.sheetSaveDisabled,
+                  pressed && voiceCanSave && styles.sheetSavePressed,
+                ]}
+                onPress={() => void confirmVoice()}
+                disabled={!voiceCanSave}
+                accessibilityRole="button"
+                accessibilityLabel={t("voiceSaveAll")}
+              >
+                <Text style={styles.sheetSaveLabel}>
+                  {voiceSaving ? STRINGS.bn.saving : t("voiceSaveAll")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -329,6 +623,155 @@ const styles = StyleSheet.create({
   backLabel: {
     color: theme.colors.muted,
     fontSize: 14,
+    fontWeight: "600",
+  },
+  // --- Voice entry (T15.2) -----------------------------------------------
+  subtitle: {
+    color: theme.colors.muted,
+    fontSize: 13,
+    textAlign: "center",
+  },
+  voiceChip: {
+    alignSelf: "center",
+    backgroundColor: theme.colors.warningSoft,
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  voiceChipLabel: {
+    color: theme.colors.warning,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  voiceArea: {
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+  },
+  voiceError: {
+    color: theme.colors.danger,
+    fontSize: 13,
+    textAlign: "center",
+  },
+  micButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: theme.colors.emerald,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  micButtonActive: {
+    backgroundColor: theme.colors.danger,
+  },
+  micButtonPressed: {
+    opacity: 0.85,
+  },
+  micIcon: {
+    fontSize: 30,
+  },
+  voiceCaption: {
+    color: theme.colors.muted,
+    fontSize: 13,
+  },
+  voicePartial: {
+    color: theme.colors.ink,
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  sheetHost: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: theme.colors.ink,
+    opacity: 0.45,
+  },
+  sheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.card,
+    borderTopRightRadius: theme.radius.card,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  sheetTitle: {
+    color: theme.colors.muted,
+    fontSize: 13,
+    textAlign: "center",
+  },
+  sheetTranscript: {
+    color: theme.colors.ink,
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  sheetLabel: {
+    color: theme.colors.muted,
+    fontSize: 13,
+  },
+  sheetRows: {
+    gap: theme.spacing.sm,
+  },
+  sheetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+  },
+  sheetCat: {
+    flex: 1,
+    color: theme.colors.ink,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  sheetInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.control,
+    backgroundColor: theme.colors.surface2,
+    color: theme.colors.ink,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    fontSize: 15,
+    width: 130,
+    textAlign: "center",
+  },
+  sheetActions: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+  },
+  sheetCancel: {
+    flex: 1,
+    borderRadius: theme.radius.control,
+    backgroundColor: theme.colors.surface2,
+    alignItems: "center",
+    paddingVertical: theme.spacing.md,
+  },
+  sheetCancelPressed: {
+    opacity: 0.8,
+  },
+  sheetCancelLabel: {
+    color: theme.colors.muted,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  sheetSave: {
+    flex: 1,
+    borderRadius: theme.radius.control,
+    backgroundColor: theme.colors.emerald,
+    alignItems: "center",
+    paddingVertical: theme.spacing.md,
+  },
+  sheetSavePressed: {
+    backgroundColor: theme.colors.emeraldSoft,
+  },
+  sheetSaveDisabled: {
+    opacity: 0.5,
+  },
+  sheetSaveLabel: {
+    color: theme.colors.onAccent,
+    fontSize: 15,
     fontWeight: "600",
   },
 });
