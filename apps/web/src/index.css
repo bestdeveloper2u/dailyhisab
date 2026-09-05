@@ -1,12 +1,19 @@
 @import "tailwindcss";
 
 /*
+ * `dark:` utilities key off the data-theme attribute on <html> (set by the
+ * FOUC script in index.html + src/store/theme.ts), NOT prefers-color-scheme.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
  * Brand tokens — mirrored from @khoroch/core (COLORS / RADII, ADR-0006).
  * Core stays the single source of truth; these values map 1:1 to its CSS_VARS.
  */
 @theme {
   --color-emerald: #0e6b50;
   --color-emerald-soft: #e3f0ea;
+  --color-accent-ink: #ffffff;
   --color-ink: #1c2321;
   --color-muted: #6b7570;
   --color-ivory: #f6f5f1;
@@ -22,6 +29,27 @@
   --shadow-card: 0 1px 2px rgba(28, 35, 33, 0.05), 0 8px 28px rgba(28, 35, 33, 0.07);
 }
 
+/*
+ * Dark tokens — same variable names redefined under [data-theme="dark"]
+ * (values from the frozen prototype www/index.html @23-29). Every Tailwind
+ * utility that references --color-* switches with the attribute, so screens
+ * stay on token classes instead of one-off colors.
+ */
+[data-theme="dark"] {
+  --color-emerald: #2fb98f;
+  --color-emerald-soft: #15302a;
+  --color-accent-ink: #06231a;
+  --color-ink: #e9edeb;
+  --color-muted: #93a09a;
+  --color-ivory: #0f1312;
+  --color-surface: #171d1b;
+  --color-surface-2: #1e2623;
+  --color-line: #26302c;
+  --color-danger: #e5484d;
+  --color-warning: #d99a3d;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
 body {
   background-color: var(--color-ivory);
   color: var(--color-ink);
@@ -32,6 +60,27 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-emerald);
   outline-offset: 2px;
+}
+
+/*
+ * Motion kill-switch (prototype @418): user preference "off" from Settings
+ * freezes every animation/transition app-wide.
+ */
+[data-motion="off"] *,
+[data-motion="off"] *::before,
+[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* OS-level reduced motion mirrors the "off" preference (prototype @512). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Bottom tab bar clears the iOS/Android home-indicator safe area. */

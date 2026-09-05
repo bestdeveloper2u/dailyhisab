@@ -120,3 +120,13 @@ export function IconSearch(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconDownload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3v11" />
+      <path d="m7.5 9.5 4.5 4.5 4.5-4.5" />
+      <path d="M4 20h16" />
+    </Svg>
+  );
+}

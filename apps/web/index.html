@@ -1,10 +1,35 @@
 <!doctype html>
-<html lang="bn">
+<html lang="bn" data-theme="light" data-motion="on">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0E6B50" />
     <title>Daily Hisab — দৈনিক খরচের হিসাব</title>
+    <script>
+      /*
+       * FOUC guard (prototype www/index.html init @1766): resolve the theme
+       * and motion preference from localStorage BEFORE first paint. Kept in
+       * sync with src/store/theme.ts (same keys, same defaults).
+       */
+      (function () {
+        try {
+          var t = localStorage.getItem("khoroch.theme");
+          if (t !== "light" && t !== "dark") t = "light";
+          document.documentElement.setAttribute("data-theme", t);
+          var m = localStorage.getItem("khoroch.motion");
+          if (m !== "on" && m !== "off") {
+            m =
+              window.matchMedia &&
+              window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                ? "off"
+                : "on";
+          }
+          document.documentElement.setAttribute("data-motion", m);
+        } catch (e) {
+          /* storage unavailable — defaults already set on <html> */
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

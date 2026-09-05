@@ -13,7 +13,7 @@ export function Logo({ withVersion = false, size = 30 }: LogoProps) {
     <span className="flex min-w-0 items-center gap-2.5">
       <span
         aria-hidden="true"
-        className="inline-flex shrink-0 items-center justify-center bg-emerald font-bold text-white"
+        className="inline-flex shrink-0 items-center justify-center bg-emerald font-bold text-accent-ink"
         style={{
           width: size,
           height: size,

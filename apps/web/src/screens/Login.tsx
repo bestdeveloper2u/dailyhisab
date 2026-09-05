@@ -130,7 +130,7 @@ export function Login() {
             type="submit"
             disabled={pending}
             aria-label={pending ? l(lang, "pending") : undefined}
-            className="mt-1 h-12 rounded-control bg-emerald font-bold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1 h-12 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {mode === "login" ? t(lang, "loginBtn") : l(lang, "registerBtn")}
           </button>

@@ -25,7 +25,7 @@ export function Modal({ open, onClose, label, children }: ModalProps) {
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm lg:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-sm lg:items-center"
       onClick={onClose}
       data-testid="modal-backdrop"
     >

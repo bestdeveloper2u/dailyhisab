@@ -200,7 +200,7 @@ export function Dashboard() {
           <button
             type="button"
             onClick={retry}
-            className="mt-3 rounded-control bg-emerald px-3.5 py-2 text-sm font-bold text-white transition-[filter] hover:brightness-110"
+            className="mt-3 rounded-control bg-emerald px-3.5 py-2 text-sm font-bold text-accent-ink transition-[filter] hover:brightness-110"
           >
             {W[lang].errRetry}
           </button>
@@ -237,7 +237,7 @@ export function Dashboard() {
             <button
               type="button"
               onClick={() => navigate("/expenses?voice=1")}
-              className="rounded-[14px] bg-emerald px-2.5 py-3 text-[14.5px] font-semibold text-white transition-transform active:scale-[0.97]"
+              className="rounded-[14px] bg-emerald px-2.5 py-3 text-[14.5px] font-semibold text-accent-ink transition-transform active:scale-[0.97]"
             >
               🎙 {W[lang].voiceBtn}
             </button>

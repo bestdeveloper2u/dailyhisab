@@ -6,6 +6,7 @@ import { groupName, payName, todayIso } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
 import { Modal } from "./Modal";
+import { toast } from "../lib/toast";
 import { IconMic } from "./icons";
 
 /**
@@ -157,10 +158,17 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     }
     const res = await bulkCreate.mutateAsync(clean);
     if (res.ok) {
-      setSavedCount(res.data.length);
+      const count = res.data.length;
+      setSavedCount(count);
       setItems(null);
       setText("");
       setConfidence(null);
+      // Prototype parity: announce the batch save (e.g. "✓ ২টি সংরক্ষিত হয়েছে").
+      toast(
+        lang === "bn"
+          ? `✓ ${toBnDigits(String(count))} ${w(lang, "savedCount")}`
+          : `✓ ${count} ${w(lang, "savedCount")}`,
+      );
     } else {
       setError(res.detail || w(lang, "errFallback"));
     }
@@ -198,7 +206,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
               onClick={listening ? stopListening : startListening}
               aria-pressed={listening}
               aria-label={listening ? w(lang, "listening") : w(lang, "mic")}
-              className={`flex h-16 w-16 items-center justify-center rounded-full text-white shadow-card transition-transform ${
+              className={`flex h-16 w-16 items-center justify-center rounded-full text-accent-ink shadow-card transition-transform ${
                 listening ? "animate-pulse bg-danger" : "bg-emerald hover:scale-105"
               }`}
             >
@@ -235,7 +243,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
             type="button"
             onClick={handleParse}
             disabled={pending || !text.trim()}
-            className="h-11 rounded-control bg-emerald font-bold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-11 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {parse.isPending ? w(lang, "finding") : w(lang, "findBtn")}
           </button>
@@ -300,7 +308,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
               type="button"
               onClick={handleSaveAll}
               disabled={pending}
-              className="h-11 rounded-control bg-emerald font-bold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {bulkCreate.isPending
                 ? w(lang, "saving")

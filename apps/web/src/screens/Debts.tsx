@@ -6,6 +6,7 @@ import { dayLabel, normalizeAmount, todayIso } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
 import { Modal } from "../components/Modal";
+import { toast } from "../lib/toast";
 import { IconTrash } from "../components/icons";
 
 type StatusTab = "open" | "settled" | "all";
@@ -35,8 +36,15 @@ function DeleteDebtButton({ debt }: { debt: Debt }) {
       <button
         type="button"
         disabled={remove.isPending}
-        onClick={() => remove.mutate(debt.id, { onSuccess: () => setArmed(false) })}
-        className="rounded-control bg-danger px-2 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+        onClick={() =>
+          remove.mutate(debt.id, {
+            onSuccess: () => {
+              setArmed(false);
+              toast(w(lang, "tDeleted"));
+            },
+          })
+        }
+        className="rounded-control bg-danger px-2 py-1.5 text-xs font-bold text-accent-ink disabled:opacity-60"
       >
         {w(lang, "confirmDelete")}
       </button>
@@ -73,11 +81,12 @@ function PayModal({ debt, onClose }: { debt: Debt; onClose: () => void }) {
         onSuccess: (res) => {
           if (res.ok) {
             // FULL settles the row; PARTIAL shrinks it — the list refetches.
-            setFeedback(
+            const message =
               res.data.status === "FULL"
                 ? w(lang, "dPaidFull")
-                : `${w(lang, "dPaidPartial")} ${formatTaka(res.data.debt.amt, lang)}`,
-            );
+                : `${w(lang, "dPaidPartial")} ${formatTaka(res.data.debt.amt, lang)}`;
+            setFeedback(message);
+            toast(message);
             setTimeout(() => onClose(), 900);
           } else {
             setError(res.detail || w(lang, "dErrPay"));
@@ -144,7 +153,7 @@ function PayModal({ debt, onClose }: { debt: Debt; onClose: () => void }) {
           <button
             type="submit"
             disabled={pay.isPending}
-            className="rounded-control bg-emerald px-4 py-2.5 text-sm font-bold text-white hover:brightness-110 disabled:opacity-60"
+            className="rounded-control bg-emerald px-4 py-2.5 text-sm font-bold text-accent-ink hover:brightness-110 disabled:opacity-60"
           >
             {pay.isPending ? w(lang, "saving") : w(lang, "dPay")}
           </button>
@@ -262,6 +271,7 @@ export function Debts() {
             setNote("");
             setIso(todayIso());
             setSavedFlash(true);
+            toast(t(lang, "savedCheck"));
             setTimeout(() => setSavedFlash(false), 2000);
           } else {
             setFormError(res.detail || w(lang, "dErrSave"));
@@ -452,7 +462,7 @@ export function Debts() {
           <button
             type="submit"
             disabled={create.isPending}
-            className="rounded-control bg-emerald px-4 py-2.5 text-sm font-bold text-white hover:brightness-110 disabled:opacity-60"
+            className="rounded-control bg-emerald px-4 py-2.5 text-sm font-bold text-accent-ink hover:brightness-110 disabled:opacity-60"
           >
             {create.isPending ? w(lang, "saving") : w(lang, "save")}
           </button>

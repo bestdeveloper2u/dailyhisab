@@ -5,6 +5,7 @@ import { useBudget, useBudgetMutation } from "../lib/queries";
 import { groupName, monthLabel, normalizeAmount, shiftYm, todayIso, ymOfIso } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
+import { toast } from "../lib/toast";
 
 /** Prototype tag rule: ≤75% good, ≤100% warn, above over. */
 function budgetTag(pct: number, lang: "bn" | "en"): { label: string; cls: string } {
@@ -80,6 +81,7 @@ function TotalCard({ budget, lang }: { budget: Budget; lang: "bn" | "en" }) {
       {
         onSuccess: (res) => {
           if (!res.ok) setError(res.detail || w(lang, "budErrSave"));
+          else toast(t(lang, "savedCheck"));
         },
         onError: () => setError(w(lang, "budErrSave")),
       },
@@ -176,6 +178,7 @@ function CatRow({ budget, cat, usage }: { budget: Budget; cat: string; usage: { 
       {
         onSuccess: (res) => {
           if (!res.ok) setError(res.detail || w(lang, "budErrSave"));
+          else toast(t(lang, "savedCheck"));
         },
         onError: () => setError(w(lang, "budErrSave")),
       },

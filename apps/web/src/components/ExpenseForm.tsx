@@ -1,9 +1,19 @@
 import { useState, type FormEvent } from "react";
+import { t } from "@khoroch/core";
 import type { Expense, ExpenseGroup, PayMethod } from "@khoroch/api-client";
 import { useExpenseMutations } from "../lib/queries";
-import { GROUP_LABELS, GROUP_ORDER, PAY_LABELS, normalizeAmount, todayIso } from "../lib/catalog";
+import {
+  BUMP_STEPS,
+  GROUP_LABELS,
+  GROUP_ORDER,
+  PAY_LABELS,
+  bumpAmount,
+  normalizeAmount,
+  todayIso,
+} from "../lib/catalog";
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
+import { toast } from "../lib/toast";
 import { Modal } from "./Modal";
 
 const inputClass =
@@ -56,6 +66,7 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
         body: { amt: amtStr, cat: catTrimmed, grp, pay, iso, desc: desc.trim() || null },
       });
       if (res.ok) {
+        toast(t(lang, "savedCheck"));
         onClose();
         return;
       }
@@ -73,6 +84,7 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
         setAmt("");
         setCat("");
         setDesc("");
+        toast(t(lang, "savedCheck"));
         onClose();
         return;
       }
@@ -119,6 +131,23 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
             placeholder={w(lang, "amtPh")}
             className="rounded-control border border-line bg-ivory px-3.5 py-3 text-2xl font-bold tabular-nums text-ink placeholder:text-muted/50 focus:border-emerald focus:outline-none"
           />
+          {/* Quick +amount chips (prototype qchips @783-784). */}
+          <div
+            role="group"
+            aria-label={w(lang, "bumpLabel")}
+            className="flex flex-wrap gap-1.5"
+          >
+            {BUMP_STEPS.map((step) => (
+              <button
+                key={step.key}
+                type="button"
+                onClick={() => setAmt(bumpAmount(amt, step.add))}
+                className="rounded-full border border-line bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:border-emerald hover:text-emerald"
+              >
+                {w(lang, step.key)}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -212,7 +241,7 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
         <button
           type="submit"
           disabled={pending}
-          className="h-12 rounded-control bg-emerald font-bold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-12 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? w(lang, "saving") : w(lang, "save")}
         </button>

@@ -176,3 +176,23 @@ export function normalizeAmount(raw: string): string | null {
   const [int, frac = ""] = cleaned.split(".");
   return `${int}.${(frac + "00").slice(0, 2)}`;
 }
+
+/**
+ * Prototype bump() (www/index.html @1718): add `add` to the current amount
+ * input value, tolerating empty/garbage input, rounded to 2dp as a string.
+ */
+export function bumpAmount(current: string, add: number): string {
+  const parsed = Number.parseFloat(current);
+  const base = Number.isFinite(parsed) ? parsed : 0;
+  return (Math.round((base + add) * 100) / 100).toString();
+}
+
+/** Bump chips mirroring the prototype qchips (@783-784). */
+export const BUMP_STEPS = [
+  { key: "bump10", add: 10 },
+  { key: "bump50", add: 50 },
+  { key: "bump100", add: 100 },
+  { key: "bump500", add: 500 },
+] as const;
+
+export type BumpKey = (typeof BUMP_STEPS)[number]["key"];

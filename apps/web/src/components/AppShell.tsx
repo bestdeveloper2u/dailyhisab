@@ -3,6 +3,8 @@ import { t } from "@khoroch/core";
 import { useLangStore } from "../store/lang";
 import { LangToggle } from "./LangToggle";
 import { Logo } from "./Logo";
+import { ToastHost } from "./Toast";
+import { UserMenu } from "./UserMenu";
 import {
   IconBarChart,
   IconHome,
@@ -37,10 +39,12 @@ export function AppShell() {
 
   return (
     <div className={`min-h-dvh bg-ivory text-ink ${lang === "bn" ? "font-bn" : "font-en"}`}>
+      <ToastHost />
       <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-line bg-ivory px-4 sm:px-6">
         <Logo withVersion />
         <div className="flex-1" />
         <LangToggle size="compact" />
+        <UserMenu />
       </header>
 
       {/* Fluid full-width layout like the frozen prototype (no max-w cap). */}
@@ -54,7 +58,7 @@ export function AppShell() {
                 end={end}
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-semibold transition-colors ${
-                    isActive ? "bg-emerald text-white" : "text-muted hover:bg-surface-2 hover:text-ink"
+                    isActive ? "bg-emerald text-accent-ink" : "text-muted hover:bg-surface-2 hover:text-ink"
                   }`
                 }
               >
@@ -74,7 +78,7 @@ export function AppShell() {
         type="button"
         aria-label={t(lang, "addExpense")}
         onClick={() => navigate("/expenses?voice=1")}
-        className="fab-pos fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-emerald text-white shadow-card lg:right-8"
+        className="fab-pos fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-emerald text-accent-ink shadow-card lg:right-8"
       >
         <IconPlus className="h-6 w-6" />
       </button>

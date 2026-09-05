@@ -15,9 +15,12 @@ import {
 } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
+import { downloadCsv, expensesToCsv } from "../lib/csv";
 import { ExpenseForm } from "../components/ExpenseForm";
+import { toast } from "../lib/toast";
 import { VoiceOverlay } from "../components/VoiceOverlay";
 import {
+  IconDownload,
   IconMic,
   IconPencil,
   IconPlus,
@@ -81,8 +84,15 @@ function DeleteButton({ expense }: { expense: Expense }) {
       <button
         type="button"
         disabled={remove.isPending}
-        onClick={() => remove.mutate(expense.id, { onSuccess: () => setArmed(false) })}
-        className="rounded-control bg-danger px-2 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+        onClick={() =>
+          remove.mutate(expense.id, {
+            onSuccess: () => {
+              setArmed(false);
+              toast(w(lang, "tDeleted"));
+            },
+          })
+        }
+        className="rounded-control bg-danger px-2 py-1.5 text-xs font-bold text-accent-ink disabled:opacity-60"
       >
         {w(lang, "confirmDelete")}
       </button>
@@ -153,6 +163,14 @@ export function Expenses() {
 
   const error = query.isError ? query.error : null;
 
+  /** CSV of the loaded rows (prototype csvBtn @1358): toast started → download → done. */
+  function handleExportCsv() {
+    if (rows.length === 0) return;
+    toast(w(lang, "csvStarted"));
+    downloadCsv(expensesToCsv(rows, lang), "khoroch-expenses.csv");
+    toast(w(lang, "csvDone"));
+  }
+
   return (
     <section>
       <h1 className="text-[22px] font-bold sm:text-2xl">{t(lang, "navExpenses")}</h1>
@@ -173,7 +191,7 @@ export function Expenses() {
         <button
           type="button"
           onClick={() => setFormOpen(true)}
-          className="flex items-center gap-1.5 rounded-control bg-emerald px-3.5 py-2.5 text-sm font-bold text-white transition-[filter] hover:brightness-110"
+          className="flex items-center gap-1.5 rounded-control bg-emerald px-3.5 py-2.5 text-sm font-bold text-accent-ink transition-[filter] hover:brightness-110"
         >
           <IconPlus className="h-4 w-4" />
           {t(lang, "addExpense")}
@@ -185,6 +203,16 @@ export function Expenses() {
         >
           <IconMic className="h-4 w-4" />
           {w(lang, "voiceBtn")}
+        </button>
+        <button
+          type="button"
+          onClick={handleExportCsv}
+          disabled={rows.length === 0}
+          aria-label={w(lang, "csvLabel")}
+          className="flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2.5 text-sm font-semibold text-ink hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <IconDownload className="h-4 w-4" />
+          {w(lang, "csvLabel")}
         </button>
       </div>
 
@@ -248,7 +276,7 @@ export function Expenses() {
           <button
             type="button"
             onClick={() => setFormOpen(true)}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-control bg-emerald px-4 py-2.5 text-sm font-bold text-white hover:brightness-110"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-control bg-emerald px-4 py-2.5 text-sm font-bold text-accent-ink hover:brightness-110"
           >
             <IconPlus className="h-4 w-4" />
             {t(lang, "addExpense")}

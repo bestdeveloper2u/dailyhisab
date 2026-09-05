@@ -147,6 +147,26 @@ export const W = {
     budCatPh: "সীমা (৳)",
     budErr: "বাজেট লোড করা যায়নি — আবার চেষ্টা করুন",
     budErrSave: "বাজেট সংরক্ষণ করা যায়নি",
+    // settings — appearance (prototype themeSeg @854 + tweaks @967-970)
+    theme: "থিম",
+    light: "লাইট",
+    dark: "ডার্ক",
+    motion: "মোশন",
+    on: "চালু",
+    off: "বন্ধ",
+    // avatar popover (prototype @585-592)
+    profileSettings: "প্রোফাইল ও সেটিংস",
+    // toasts + CSV export (prototype toast messages / csvBtn @1358)
+    tDeleted: "মুছে ফেলা হয়েছে ✓",
+    csvStarted: "CSV ফাইল তৈরি হচ্ছে…",
+    csvDone: "CSV ডাউনলোড হয়েছে ✓",
+    csvLabel: "CSV",
+    // amount bump chips (prototype qchips @783-784)
+    bumpLabel: "দ্রুত যোগ (৳)",
+    bump10: "+১০",
+    bump50: "+৫০",
+    bump100: "+১০০",
+    bump500: "+৫০০",
   },
   en: {
     searchPh: "Search — category, note…",
@@ -288,6 +308,26 @@ export const W = {
     budCatPh: "Limit (৳)",
     budErr: "Could not load the budget — please retry",
     budErrSave: "Could not save the budget",
+    // settings — appearance (prototype themeSeg @854 + tweaks @967-970)
+    theme: "Theme",
+    light: "Light",
+    dark: "Dark",
+    motion: "Motion",
+    on: "On",
+    off: "Off",
+    // avatar popover (prototype @585-592)
+    profileSettings: "Profile & settings",
+    // toasts + CSV export (prototype toast messages / csvBtn @1358)
+    tDeleted: "Deleted ✓",
+    csvStarted: "Preparing CSV…",
+    csvDone: "CSV downloaded ✓",
+    csvLabel: "CSV",
+    // amount bump chips (prototype qchips @783-784)
+    bumpLabel: "Quick add (৳)",
+    bump10: "+10",
+    bump50: "+50",
+    bump100: "+100",
+    bump500: "+500",
   },
 } as const;
 
