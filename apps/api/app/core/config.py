@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="KHOROCH_", env_file=".env", extra="ignore")
 
     app_name: str = "Daily Hisab API"
-    version: str = "0.7.0"
+    version: str = "0.8.0"
     env: str = "local"
     database_url: str = "sqlite+aiosqlite:///./khoroch.db"
     cors_origins: list[str] = [
