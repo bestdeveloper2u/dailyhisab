@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -120,6 +120,21 @@ describe("AppShell", () => {
 
     expect(screen.getAllByText("Dashboard").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("ড্যাশবোর্ড")).toHaveLength(0);
+  });
+
+  it("renders every NAV item — including Budget — in the <1024px bottom tab bar", () => {
+    renderShell();
+    const tabs = screen.getByRole("navigation", { name: "Tabs" });
+    // Icon-only tabs: the accessible name comes from aria-label (bn default).
+    for (const label of ["ড্যাশবোর্ড", "খরচ", "রিপোর্ট", "ধার", "বাজেট", "সেটিংস"]) {
+      expect(
+        within(tabs).getByRole("link", { name: label }),
+      ).toHaveAttribute("href");
+    }
+    // WCAG 2.2 target size: each tab is ≥44px tall and 1/6 of the bar wide.
+    const budgetTab = within(tabs).getByRole("link", { name: "বাজেট" });
+    expect(budgetTab).toHaveClass("min-h-11");
+    expect(budgetTab.getAttribute("href")).toBe("/budget");
   });
 
   it("renders the prototype-faithful analytics: 4 stats, budget bar, comparison, trend", async () => {

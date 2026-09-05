@@ -24,14 +24,11 @@ const NAV = [
   { to: "/settings", key: "navSettings", end: false, Icon: IconSliders },
 ] as const;
 
-/** Tab bar drops "budget" on small viewports (still reachable via sidebar/settings). */
-const TABS = NAV.filter((item) => item.key !== "navBudget");
-
 /**
  * App shell mirroring the frozen prototype (www/index.html):
  * app bar with brand + version chip + compact language toggle,
- * 236px sidebar ≥1024px, 5-item bottom tab bar <1024px with safe-area inset,
- * and an emerald floating add button.
+ * 236px sidebar ≥1024px, 6-item icon-only bottom tab bar <1024px
+ * with safe-area inset, and an emerald floating add button.
  */
 export function AppShell() {
   const lang = useLangStore((s) => s.lang);
@@ -87,19 +84,23 @@ export function AppShell() {
         aria-label="Tabs"
         className="pb-safe fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-surface lg:hidden"
       >
-        {TABS.map(({ to, key, end, Icon }) => (
+        {/* All 6 NAV items fit <1024px by going icon-only: 360px / 6 = 60px per
+            tab, each ≥44px tall (WCAG 2.2 target size); labels live in the
+            accessible name (aria-label) + title tooltip. */}
+        {NAV.map(({ to, key, end, Icon }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
+            aria-label={t(lang, key)}
+            title={t(lang, key)}
             className={({ isActive }) =>
-              `flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2 text-[10.5px] font-semibold ${
+              `flex min-h-11 min-w-0 flex-1 items-center justify-center ${
                 isActive ? "text-emerald" : "text-muted"
               }`
             }
           >
-            <Icon className="h-[21px] w-[21px]" />
-            {t(lang, key)}
+            <Icon className="h-6 w-6" />
           </NavLink>
         ))}
       </nav>
