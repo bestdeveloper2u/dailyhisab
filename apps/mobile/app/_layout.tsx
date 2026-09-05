@@ -26,6 +26,7 @@ function RootNavigator() {
       <Stack screenOptions={{ headerShown: false }}>
         {/* Explicit registration keeps these routes in the typed manifest. */}
         <Stack.Screen name="list" />
+        <Stack.Screen name="month" />
         <Stack.Screen name="report" />
         <Stack.Screen name="budget" />
         <Stack.Screen name="settings" />

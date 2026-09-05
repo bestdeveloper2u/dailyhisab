@@ -233,6 +233,20 @@ export default function Dashboard() {
             styles.debtsButton,
             pressed && styles.debtsButtonPressed,
           ]}
+          onPress={() => router.push("/month")}
+          accessibilityRole="button"
+          accessibilityLabel={STRINGS.bn.monthTitle}
+        >
+          <Text style={styles.debtsButtonLabel} numberOfLines={1}>
+            {STRINGS.bn.monthTitle} →
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.debtsButton,
+            pressed && styles.debtsButtonPressed,
+          ]}
           onPress={() => router.push("/debts")}
           accessibilityRole="button"
           accessibilityLabel={STRINGS.bn.openDebts}

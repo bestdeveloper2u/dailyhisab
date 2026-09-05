@@ -60,9 +60,10 @@ export const STRINGS = {
     openAllExpenses: "সব খরচ",
     entriesShort: "টি এন্ট্রি",
     exportCsv: "CSV",
+    csvPreparing: "তৈরি হচ্ছে…",
     exportingCsv: "CSV নামানো হচ্ছে…",
     csvDone: "CSV ডাউনলোড হয়েছে ✓",
-    csvShareFailed: "CSV ফাইলটি খোলা যায়নি — আবার চেষ্টা করুন।",
+    csvShareFailed: "CSV ফাইলটি তৈরি বা শেয়ার করা যায়নি — ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
     emptySearch: "কিছু পাওয়া যায়নি।",
 
     // Register toggle (T12.2 — prototype authscreen parity)
@@ -116,13 +117,23 @@ export const STRINGS = {
     // Report month KPIs + prev-month compare (T13.1 — prototype screen-month parity)
     kpiEntries: "এন্ট্রি সংখ্যা",
     kpiAvg: "দৈনিক গড়",
-    kpiMaxDay: "সর্বোচ্চ দিন",
+    kpiMaxDay: "সর্বোচ্চ খরচের দিন",
     kpiMaxGroup: "সর্বোচ্চ খাত",
     cmpPrevTitle: "মাসের তুলনা",
     vsPrev: "গত মাসের চেয়ে",
     cmpMore: "বেশি",
     cmpLess: "কম",
     cmpNoPrev: "গত মাসের কোনো ডেটা নেই",
+
+    // Month screen (T14.5 — prototype screen-month parity)
+    monthTitle: "মাসিক হিসাব",
+    monthSub: "মাসিক সারসংক্ষেপ — আপনার শিটের মতোই",
+    monthTotalCard: "মোট মাসিক ব্যয়",
+    allEntries: "এই মাসের খরচ",
+    cmpThis: "এই মাস",
+    cmpPrev: "গত মাস",
+    cmpDiff: "পার্থক্য",
+    cmpEntries: "এন্ট্রি",
 
     // Budget (T10.1)
     budgetTitle: "বাজেট",
@@ -215,6 +226,7 @@ export const STRINGS = {
     openAllExpenses: "All expenses",
     entriesShort: "entries",
     exportCsv: "CSV",
+    csvPreparing: "Preparing…",
     exportingCsv: "Downloading CSV…",
     csvDone: "CSV downloaded ✓",
     csvShareFailed: "Couldn't open the CSV file — please try again.",
@@ -278,6 +290,16 @@ export const STRINGS = {
     cmpMore: "more",
     cmpLess: "less",
     cmpNoPrev: "No data for last month",
+
+    // Month screen (T14.5 — prototype screen-month parity)
+    monthTitle: "Monthly summary",
+    monthSub: "Monthly summary — just like your sheet",
+    monthTotalCard: "Total monthly spend",
+    allEntries: "This month's entries",
+    cmpThis: "This month",
+    cmpPrev: "Last month",
+    cmpDiff: "Difference",
+    cmpEntries: "entries",
 
     // Budget (T10.1)
     budgetTitle: "Budget",
