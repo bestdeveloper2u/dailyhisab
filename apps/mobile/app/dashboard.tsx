@@ -177,9 +177,24 @@ export default function Dashboard() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>
-                {STRINGS.bn.recentExpenses}
-              </Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>
+                  {STRINGS.bn.recentExpenses}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.seeAllButton,
+                    pressed && styles.seeAllButtonPressed,
+                  ]}
+                  onPress={() => router.push("/list")}
+                  accessibilityRole="button"
+                  accessibilityLabel={STRINGS.bn.openAllExpenses}
+                >
+                  <Text style={styles.seeAllLabel} numberOfLines={1}>
+                    {STRINGS.bn.openAllExpenses} ›
+                  </Text>
+                </Pressable>
+              </View>
               {recent.length === 0 ? (
                 <Text style={styles.emptyNote}>{STRINGS.bn.emptyList}</Text>
               ) : (
@@ -335,6 +350,26 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     fontSize: 15,
     fontWeight: "700",
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing.md,
+  },
+  seeAllButton: {
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+  },
+  seeAllButtonPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  seeAllLabel: {
+    color: theme.colors.emerald,
+    fontSize: 13,
+    fontWeight: "700",
+    flexShrink: 1,
   },
   groupRow: {
     flexDirection: "row",

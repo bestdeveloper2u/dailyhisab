@@ -483,3 +483,28 @@ export async function putBudget(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
+
+// --- CSV export (Phase 3, T12.2) ------------------------------------------------
+
+/** GET /api/v1/export/expenses.csv query params; both optional. */
+export interface ExportCsvParams {
+  from?: string; // YYYY-MM-DD inclusive
+  to?: string; // YYYY-MM-DD inclusive
+}
+
+/**
+ * Full URL for the CSV export endpoint (UTF-8 BOM + Bengali header row).
+ * Returns a URL instead of fetching because the file must go through
+ * FileSystem.downloadAsync (native download + share sheet), not fetch();
+ * the caller attaches the Bearer access token as a header itself.
+ */
+export function exportExpensesCsvUrl(params: ExportCsvParams = {}): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      qs.set(key, value);
+    }
+  }
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+  return `${API_BASE}/api/v1/export/expenses.csv${suffix}`;
+}

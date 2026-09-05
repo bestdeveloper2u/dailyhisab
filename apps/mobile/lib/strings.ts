@@ -52,6 +52,28 @@ export const STRINGS = {
     noExpensesThisMonth: "এই মাসে কোনো খরচ নেই।",
     openDebts: "ধার-দেনা",
 
+    // All-expenses list (T12.2 — prototype screen-list parity)
+    listTitle: "খরচ তালিকা",
+    listSub: "সব মাসের এন্ট্রি এক জায়গায়",
+    searchPlaceholder: "খুঁজুন — খাত, বিবরণ…",
+    allMonths: "সব",
+    openAllExpenses: "সব খরচ",
+    entriesShort: "টি এন্ট্রি",
+    exportCsv: "CSV",
+    exportingCsv: "CSV নামানো হচ্ছে…",
+    csvDone: "CSV ডাউনলোড হয়েছে ✓",
+    csvShareFailed: "CSV ফাইলটি খোলা যায়নি — আবার চেষ্টা করুন।",
+    emptySearch: "কিছু পাওয়া যায়নি।",
+
+    // Register toggle (T12.2 — prototype authscreen parity)
+    modeLogin: "লগইন",
+    modeRegister: "রেজিস্টার",
+    namePlaceholder: "আপনার নাম (ঐচ্ছিক)",
+    registerBtn: "অ্যাকাউন্ট খুলুন",
+    registering: "অ্যাকাউন্ট খুলছি…",
+    errEmailTaken: "এই ইমেইলে একটা অ্যাকাউন্ট আছে — লগইন করুন।",
+    errWeakPassword: "পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের দিন।",
+
     // Debts (T3.4)
     debtsTitle: "ধার-দেনা",
     statusOpen: "চলমান",
@@ -173,6 +195,28 @@ export const STRINGS = {
     recentExpenses: "Recent expenses",
     noExpensesThisMonth: "No expenses this month.",
     openDebts: "Debts",
+
+    // All-expenses list (T12.2 — prototype screen-list parity)
+    listTitle: "All expenses",
+    listSub: "Every month's entries in one place",
+    searchPlaceholder: "Search — category, description…",
+    allMonths: "All",
+    openAllExpenses: "All expenses",
+    entriesShort: "entries",
+    exportCsv: "CSV",
+    exportingCsv: "Downloading CSV…",
+    csvDone: "CSV downloaded ✓",
+    csvShareFailed: "Couldn't open the CSV file — please try again.",
+    emptySearch: "Nothing found.",
+
+    // Register toggle (T12.2 — prototype authscreen parity)
+    modeLogin: "Log in",
+    modeRegister: "Register",
+    namePlaceholder: "Your name (optional)",
+    registerBtn: "Create account",
+    registering: "Creating account…",
+    errEmailTaken: "An account with this email already exists — log in instead.",
+    errWeakPassword: "Password must be at least 8 characters.",
 
     // Debts (T3.4)
     debtsTitle: "Debts",
