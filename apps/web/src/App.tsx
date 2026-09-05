@@ -7,6 +7,7 @@ import { Dashboard } from "./screens/Dashboard";
 import { Debts } from "./screens/Debts";
 import { Expenses } from "./screens/Expenses";
 import { Login } from "./screens/Login";
+import { Month } from "./screens/Month";
 import { Report } from "./screens/Report";
 import { Settings } from "./screens/Settings";
 
@@ -49,6 +50,7 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/expenses" element={<Expenses />} />
+            <Route path="/month" element={<Month />} />
             <Route path="/report" element={<Report />} />
             <Route path="/debts" element={<Debts />} />
             <Route path="/budget" element={<Budget />} />

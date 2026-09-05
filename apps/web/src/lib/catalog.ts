@@ -42,6 +42,16 @@ export const PAY_LABELS: Record<PayMethod, { bn: string; en: string }> = {
 export const payName = (p: string, lang: Lang): string =>
   PAY_LABELS[p as PayMethod]?.[lang] ?? p;
 
+/** Display order for the settings payment-methods card (prototype @869-874). */
+export const PAY_ORDER: PayMethod[] = [
+  "cash",
+  "bkash",
+  "nagad",
+  "rocket",
+  "card",
+  "bank",
+];
+
 /** Prototype group dot colors (www/index.html GROUPS map — frozen design). */
 export const GROUP_DOTS: Record<string, string> = {
   food: "#D97706",

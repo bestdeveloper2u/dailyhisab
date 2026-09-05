@@ -7,6 +7,7 @@ import { ToastHost } from "./Toast";
 import { UserMenu } from "./UserMenu";
 import {
   IconBarChart,
+  IconCalendar,
   IconHome,
   IconPlus,
   IconReceipt,
@@ -18,6 +19,7 @@ import {
 const NAV = [
   { to: "/", key: "navDashboard", end: true, Icon: IconHome },
   { to: "/expenses", key: "navExpenses", end: false, Icon: IconReceipt },
+  { to: "/month", key: "navMonthly", end: false, Icon: IconCalendar },
   { to: "/report", key: "navReport", end: false, Icon: IconBarChart },
   { to: "/debts", key: "navDebts", end: false, Icon: IconSwap },
   { to: "/budget", key: "navBudget", end: false, Icon: IconWallet },
@@ -48,6 +50,16 @@ export function AppShell() {
       <div className="flex w-full">
         <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-[236px] shrink-0 flex-col border-r border-line bg-surface px-2.5 py-3 lg:flex">
           <nav aria-label="Main" className="flex flex-col gap-1">
+            {/* খরচ যোগ করুন (prototype sidebar item @605-608) — opens the
+                manual-add form on the expenses screen. */}
+            <button
+              type="button"
+              onClick={() => navigate("/expenses?add=1")}
+              className="flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <IconPlus className="h-[19px] w-[19px] shrink-0" />
+              {t(lang, "addExpense")}
+            </button>
             {NAV.map(({ to, key, end, Icon }) => (
               <NavLink
                 key={to}
@@ -84,7 +96,7 @@ export function AppShell() {
         aria-label="Tabs"
         className="pb-safe fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-surface lg:hidden"
       >
-        {/* All 6 NAV items fit <1024px by going icon-only: 360px / 6 = 60px per
+        {/* All 7 NAV items fit <1024px by going icon-only: 360px / 7 ≈ 51px per
             tab, each ≥44px tall (WCAG 2.2 target size); labels live in the
             accessible name (aria-label) + title tooltip. */}
         {NAV.map(({ to, key, end, Icon }) => (

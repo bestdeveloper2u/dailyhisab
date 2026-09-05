@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
-import { useMonthlyReport, useYearlyReport } from "../lib/queries";
+import { useExpensesInfinite, useMonthlyReport, useYearlyReport } from "../lib/queries";
 import {
   dayLabel,
   groupName,
@@ -211,6 +211,18 @@ function YearlyView({ thisYear }: { thisYear: number }) {
   const lang = useLangStore((s) => s.lang);
   const [year, setYear] = useState(thisYear);
   const query = useYearlyReport(year);
+  // Matrix (prototype matrixLbl @769) aggregates group × month client-side
+  // from the year's entries — the yearly API returns separate by_group /
+  // by_month totals without the cross product.
+  const listQ = useExpensesInfinite({
+    from: `${year}-01-01`,
+    to: `${year}-12-31`,
+    pageLimit: 200,
+  });
+  const rows = useMemo(
+    () => listQ.data?.pages.flatMap((page) => (page.ok ? page.data.items : [])) ?? [],
+    [listQ.data],
+  );
 
   const report = query.data?.ok ? query.data.data : null;
   const byMonth = useMemo(
@@ -224,6 +236,27 @@ function YearlyView({ thisYear }: { thisYear: number }) {
     ? Object.entries(report.by_group).sort((a, b) => moneyToNumber(b[1]) - moneyToNumber(a[1]))[0]
     : null;
   const monthlyAvg = report ? moneyToNumber(report.total) / 12 : 0;
+
+  // group × month cross product from the loaded entries (matrix table).
+  const matrix = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+    const cells = new Map<string, number>(); // `${grp}|${ym}` → taka
+    const colTotals = new Map<string, number>();
+    const rowTotals = new Map<string, number>();
+    for (const row of rows) {
+      const ym = row.iso.slice(0, 7);
+      const v = moneyToNumber(row.amt);
+      const ck = `${row.grp}|${ym}`;
+      cells.set(ck, (cells.get(ck) ?? 0) + v);
+      colTotals.set(ym, (colTotals.get(ym) ?? 0) + v);
+      rowTotals.set(row.grp, (rowTotals.get(row.grp) ?? 0) + v);
+    }
+    const groups = [...rowTotals.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g);
+    return { months, cells, colTotals, rowTotals, groups };
+  }, [rows, year]);
+
+  const cellText = (v: number): string =>
+    v === 0 ? "—" : lang === "bn" ? toBnDigits(String(Math.round(v))) : String(Math.round(v));
 
   return (
     <div>
@@ -278,6 +311,71 @@ function YearlyView({ thisYear }: { thisYear: number }) {
             <p className="sr-only">
               {w(lang, "topGroup")}: {groupName(topGroup[0], lang)}
             </p>
+          )}
+
+          {/* matrix: গ্রুপভিত্তিক মাসিক ব্যয় (prototype matrixLbl @769) */}
+          {matrix.groups.length > 0 && (
+            <>
+              <h2 className="mt-6 px-1 text-[13px] font-bold text-muted">{w(lang, "matrixLbl")}</h2>
+              <div className="mt-2 overflow-x-auto rounded-card border border-line bg-surface shadow-card">
+                <table className="w-full min-w-[640px] border-collapse text-[12px]">
+                  <thead>
+                    <tr className="border-b border-line text-muted">
+                      <th scope="col" className="sticky left-0 bg-surface px-3 py-2.5 text-left font-semibold">
+                        {w(lang, "byGroup")}
+                      </th>
+                      {matrix.months.map((ym) => (
+                        <th key={ym} scope="col" className="px-2.5 py-2.5 text-right font-semibold">
+                          {monthLabel(ym, lang).split(" ")[0]}
+                        </th>
+                      ))}
+                      <th scope="col" className="px-3 py-2.5 text-right font-bold text-ink">
+                        {w(lang, "matrixTotal")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrix.groups.map((grp) => (
+                      <tr key={grp} className="border-b border-line last:border-b-0">
+                        <th scope="row" className="sticky left-0 bg-surface px-3 py-2 text-left font-semibold text-ink">
+                          {groupName(grp, lang)}
+                        </th>
+                        {matrix.months.map((ym) => (
+                          <td key={ym} className="px-2.5 py-2 text-right tabular-nums text-muted">
+                            {cellText(matrix.cells.get(`${grp}|${ym}`) ?? 0)}
+                          </td>
+                        ))}
+                        <td className="px-3 py-2 text-right font-bold tabular-nums text-ink">
+                          {cellText(matrix.rowTotals.get(grp) ?? 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-line bg-surface-2/50">
+                      <th scope="row" className="sticky left-0 bg-surface px-3 py-2.5 text-left font-bold text-ink">
+                        {w(lang, "matrixTotal")}
+                      </th>
+                      {matrix.months.map((ym) => (
+                        <td key={ym} className="px-2.5 py-2.5 text-right font-bold tabular-nums text-ink">
+                          {cellText(matrix.colTotals.get(ym) ?? 0)}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2.5 text-right font-extrabold tabular-nums text-ink">
+                        {cellText(matrix.groups.reduce((s, g) => s + (matrix.rowTotals.get(g) ?? 0), 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              {listQ.hasNextPage && (
+                <p className="mt-1.5 px-1 text-xs text-muted">
+                  {listQ.isFetchingNextPage
+                    ? w(lang, "loading")
+                    : `${w(lang, "loadMore")} → ${rows.length}+ ${w(lang, "entries")}`}
+                </p>
+              )}
+            </>
           )}
         </>
       )}

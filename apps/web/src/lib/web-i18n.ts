@@ -172,6 +172,22 @@ export const W = {
     bump50: "+৫০",
     bump100: "+১০০",
     bump500: "+৫০০",
+    // monthly screen (prototype screen-month @720-755)
+    monthSub: "মাসিক সারসংক্ষেপ — সব সংখ্যা এক নজরে",
+    monthTotal: "মোট মাসিক ব্যয়",
+    allEntries: "এই মাসের খরচ",
+    // report matrix (prototype matrixLbl @769)
+    matrixLbl: "গ্রুপভিত্তিক মাসিক ব্যয় (৳)",
+    matrixTotal: "মোট",
+    // settings cards (prototype screen-settings @843-880)
+    profName: "নাম",
+    profEmail: "ইমেইল",
+    voiceLang: "ভয়েস ভাষা",
+    voiceLangV: "বাংলা (bn-BD)",
+    payMethods: "পেমেন্ট মাধ্যম",
+    khataList: "খরচের গ্রুপ তালিকা",
+    dataBackup: "ডেটা ও ব্যাকআপ",
+    dataBackupSub: "সব খরচ ক্লাউডে অটো-ব্যাকআপ হয়",
   },
   en: {
     searchPh: "Search — category, note…",
@@ -338,6 +354,22 @@ export const W = {
     bump50: "+50",
     bump100: "+100",
     bump500: "+500",
+    // monthly screen (prototype screen-month @720-755)
+    monthSub: "Monthly summary — all numbers at a glance",
+    monthTotal: "Total this month",
+    allEntries: "This month's expenses",
+    // report matrix (prototype matrixLbl @769)
+    matrixLbl: "Monthly spend by group (৳)",
+    matrixTotal: "Total",
+    // settings cards (prototype screen-settings @843-880)
+    profName: "Name",
+    profEmail: "Email",
+    voiceLang: "Voice language",
+    voiceLangV: "Bengali (bn-BD)",
+    payMethods: "Payment methods",
+    khataList: "Expense groups",
+    dataBackup: "Data & backup",
+    dataBackupSub: "All expenses are auto-backed up to the cloud",
   },
 } as const;
 

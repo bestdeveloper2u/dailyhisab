@@ -252,6 +252,11 @@ export function Debts() {
     () => rows.filter((d) => d.dir === "borrow").reduce((s, d) => s + moneyToNumber(d.amt), 0),
     [rows],
   );
+  // Party autocomplete (prototype datalist @829): names already in the ledger.
+  const parties = useMemo(
+    () => [...new Set(rows.map((d) => d.party))].slice(0, 30),
+    [rows],
+  );
 
   function submitDebt() {
     const normalized = normalizeAmount(amt);
@@ -400,8 +405,14 @@ export function Debts() {
               onChange={(e) => setParty(e.target.value)}
               placeholder={w(lang, "dPh")}
               maxLength={120}
+              list="debtPartyList"
               className="mt-1 w-full rounded-control border border-line bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-emerald focus:outline-none"
             />
+            <datalist id="debtPartyList">
+              {parties.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label htmlFor="debtDir" className="text-[13px] font-semibold text-muted">
