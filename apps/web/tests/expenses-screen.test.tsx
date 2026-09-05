@@ -128,6 +128,24 @@ describe("Expenses screen (real API shapes)", () => {
     expect(bodies[0]).toMatchObject({ amt: "120.50", cat: "বই", grp: "food" });
   });
 
+  it("submits Bengali-digit amounts as ASCII money strings (T15.1b)", async () => {
+    const bodies: unknown[] = [];
+    stubFetch(listHandler([{ id: "1", cat: "চাল", amt: "200.00", iso: "2026-09-04" }], { onCreate: (b) => bodies.push(b) }));
+    const user = userEvent.setup();
+    renderWithProviders(<Expenses />, { route: "/expenses" });
+
+    await screen.findByText("চাল");
+    await user.click(screen.getAllByRole("button", { name: "খরচ যোগ করুন" })[0]!);
+
+    // A bn-keyboard user types Bengali digits; the API needs ^\d+\.\d{2}$.
+    await user.type(await screen.findByLabelText("পরিমাণ (৳)"), "৫০.২৫");
+    await user.type(screen.getByLabelText("খাত"), "বই");
+    await user.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ amt: "50.25", cat: "বই" });
+  });
+
   it("shows an empty state when the API returns no items", async () => {
     stubFetch(listHandler([]));
     renderWithProviders(<Expenses />, { route: "/expenses" });

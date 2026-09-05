@@ -11,6 +11,7 @@ import {
   normalizeAmount,
   todayIso,
 } from "../lib/catalog";
+import { normalizeAmountInput } from "../lib/num";
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
 import { toast } from "../lib/toast";
@@ -49,7 +50,8 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
     event.preventDefault();
     setError(null);
 
-    const amtStr = normalizeAmount(amt);
+    // T15.1b: accept Bengali digits / ৳ / commas; then validate + pad to 2dp.
+    const amtStr = normalizeAmount(normalizeAmountInput(amt));
     if (amtStr === null) {
       setError(w(lang, "errAmt"));
       return;
@@ -141,7 +143,7 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
               <button
                 key={step.key}
                 type="button"
-                onClick={() => setAmt(bumpAmount(amt, step.add))}
+                onClick={() => setAmt(bumpAmount(normalizeAmountInput(amt), step.add))}
                 className="rounded-full border border-line bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:border-emerald hover:text-emerald"
               >
                 {w(lang, step.key)}
