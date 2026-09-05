@@ -19,19 +19,28 @@ from app.schemas.expense import AmtStr
 # Per-category budget values: same 2dp non-negative string rule as amounts.
 CatAmtStr = Annotated[str, Field(pattern=r"^\d{1,10}\.\d{2}$", examples=["8000.00"])]
 
+#: category name -> per-month budget string. Shared by PUT /budgets and the
+#: backup/restore envelope (T15.3) so the two wire shapes cannot drift.
+BudgetCats = dict[Annotated[str, Field(min_length=1, max_length=80)], CatAmtStr]
+
+
+def cap_categories(cats: dict[str, str]) -> dict[str, str]:
+    """Reject more than 100 category entries (shared guard, T15.3)."""
+    if len(cats) > 100:
+        raise ValueError("too many categories (max 100)")
+    return cats
+
 
 class BudgetIn(BaseModel):
     """PUT /budgets body — both fields optional (partial upsert)."""
 
     total: AmtStr | None = None
-    cats: dict[Annotated[str, Field(min_length=1, max_length=80)], CatAmtStr] | None = None
+    cats: BudgetCats | None = None
 
     @field_validator("cats")
     @classmethod
     def _cap_category_count(cls, cats: dict[str, str] | None) -> dict[str, str] | None:
-        if cats is not None and len(cats) > 100:
-            raise ValueError("too many categories (max 100)")
-        return cats
+        return None if cats is None else cap_categories(cats)
 
 
 class BudgetCatUsage(BaseModel):

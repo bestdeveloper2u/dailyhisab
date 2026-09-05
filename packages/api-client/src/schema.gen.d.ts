@@ -328,6 +328,30 @@ export interface paths {
         patch: operations["update_expense_api_v1_expenses__expense_id__patch"];
         trace?: never;
     };
+    "/api/v1/export/backup.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Backup Json
+         * @description Dump the caller's complete ledger as one JSON envelope (ADR-0012).
+         *
+         *     Every column of every expenses/debts/budgets row; rows are ordered
+         *     deterministically (``iso ASC, id ASC`` — the CSV export's order) so the
+         *     same data always yields the same document modulo ``exported_at``.
+         */
+        get: operations["export_backup_json_api_v1_export_backup_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export/expenses.csv": {
         parameters: {
             query?: never;
@@ -359,6 +383,31 @@ export interface paths {
         get: operations["healthz_api_v1_healthz_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Restore
+         * @description REPLACE the caller's ledger with the uploaded backup (v1, ADR-0012).
+         *
+         *     The whole swap is one transaction: delete the caller's budgets, debts and
+         *     expenses, insert the uploaded rows with fresh PKs, commit. Rows whose
+         *     validation fails never reach the database; a failure mid-insert rolls
+         *     the deletes back too.
+         */
+        post: operations["import_restore_api_v1_import_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -456,6 +505,60 @@ export interface components {
             /** Refreshtoken */
             refreshToken: string;
             user: components["schemas"]["UserOut"];
+        };
+        /**
+         * BackupBudgetRow
+         * @description One budgets row (at most one per user — the PK is ``user_id``).
+         */
+        BackupBudgetRow: {
+            /** Cats */
+            cats: {
+                [key: string]: string;
+            };
+            /** Total */
+            total: string;
+            /** Updated At */
+            updated_at: string;
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * BackupCounts
+         * @description Row counts, mirroring the three collections of the same envelope.
+         */
+        BackupCounts: {
+            /** Budgets */
+            budgets: number;
+            /** Debts */
+            debts: number;
+            /** Expenses */
+            expenses: number;
+        };
+        /**
+         * BackupEnvelope
+         * @description The full-fidelity backup document (both directions, ADR-0012).
+         *
+         *     ``expenses``/``debts`` reuse :class:`ExpenseOut`/:class:`DebtOut`, so the
+         *     backup wire shape IS the CRUD wire shape (every column, money as exact
+         *     decimal strings) — a downloaded file can be fed straight back to
+         *     ``POST /import/restore``.
+         */
+        BackupEnvelope: {
+            /** Budgets */
+            budgets: components["schemas"]["BackupBudgetRow"][];
+            counts: components["schemas"]["BackupCounts"];
+            /** Debts */
+            debts: components["schemas"]["DebtOut"][];
+            /** Expenses */
+            expenses: components["schemas"]["ExpenseOut"][];
+            /** Exported At */
+            exported_at: string;
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version: 1;
         };
         /**
          * BudgetCatUsage
@@ -805,6 +908,13 @@ export interface components {
             total: string;
             /** Ym */
             ym: string;
+        };
+        /**
+         * RestoreOut
+         * @description POST /import/restore response.
+         */
+        RestoreOut: {
+            restored: components["schemas"]["BackupCounts"];
         };
         /**
          * SessionProbeOut
@@ -1454,6 +1564,26 @@ export interface operations {
             };
         };
     };
+    export_backup_json_api_v1_export_backup_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupEnvelope"];
+                };
+            };
+        };
+    };
     export_expenses_csv_api_v1_export_expenses_csv_get: {
         parameters: {
             query?: {
@@ -1502,6 +1632,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Healthz"];
+                };
+            };
+        };
+    };
+    import_restore_api_v1_import_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
