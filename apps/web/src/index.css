@@ -15,13 +15,15 @@
   --color-emerald-soft: #e3f0ea;
   --color-accent-ink: #ffffff;
   --color-ink: #1c2321;
-  --color-muted: #6b7570;
+  /* T9.3 contrast fix: #6b7570 → #616b66 (muted/surface-2 4.15 → 4.80:1). */
+  --color-muted: #616b66;
   --color-ivory: #f6f5f1;
   --color-surface: #ffffff;
   --color-surface-2: #f1efe9;
   --color-line: #e6e3db;
   --color-danger: #b42318;
-  --color-warning: #b45309;
+  /* T9.3 contrast fix: #b45309 → #aa4e08 (warning chip 4.39 → 4.78:1). */
+  --color-warning: #aa4e08;
   --font-bn: "Noto Sans Bengali", system-ui, sans-serif;
   --font-en: "Inter", system-ui, sans-serif;
   --radius-card: 16px;
@@ -45,7 +47,9 @@
   --color-surface: #171d1b;
   --color-surface-2: #1e2623;
   --color-line: #26302c;
-  --color-danger: #e5484d;
+  /* T9.3 contrast fix: #e5484d → #e96367 (danger/surface 4.37 → 5.25:1,
+   * on-danger button text 4.25 → 5.10:1; hue preserved, lightness only). */
+  --color-danger: #e96367;
   --color-warning: #d99a3d;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
 }
@@ -60,6 +64,17 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-emerald);
   outline-offset: 2px;
+}
+
+/*
+ * T9.3 (WCAG 2.2 SC 1.4.3): `placeholder:text-muted/70` composites the muted
+ * token at 70% alpha, which lands at 2.73:1 (light) / 3.79:1 (dark) on
+ * bg-surface inputs — below the 4.5:1 minimum for placeholder text. Render
+ * placeholders at full-token strength instead; unlayered rules like this one
+ * win the cascade over Tailwind's layered utilities regardless of order.
+ */
+.placeholder\:text-muted\/70::placeholder {
+  color: var(--color-muted);
 }
 
 /*
