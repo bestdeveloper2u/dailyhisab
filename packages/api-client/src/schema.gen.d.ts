@@ -44,6 +44,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/logout-cookie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout Cookie
+         * @description Clear the refresh cookie and revoke the session it points at (204).
+         *
+         *     Idempotent: a missing/unknown cookie still clears the cookie and answers
+         *     204. Revocation mirrors ``POST /auth/logout`` (session record + current
+         *     refresh token die together).
+         */
+        post: operations["logout_cookie_api_v1_auth_logout_cookie_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me": {
         parameters: {
             query?: never;
@@ -78,6 +102,31 @@ export interface paths {
          * @description Rotate a refresh token; reuse of an old token revokes the session.
          */
         post: operations["refresh_api_v1_auth_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/refresh-cookie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Cookie
+         * @description Rotate the refresh token carried in the ``kh_refresh`` httpOnly cookie.
+         *
+         *     Identical semantics to ``POST /auth/refresh`` (same KV keys, same reuse
+         *     detection); the rotated token is returned in the body AND set as the new
+         *     cookie (HttpOnly, Secure, SameSite=Lax, path=/api/v1/auth). Absent
+         *     cookie → 401.
+         */
+        post: operations["refresh_cookie_api_v1_auth_refresh_cookie_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -868,6 +917,24 @@ export interface operations {
             };
         };
     };
+    logout_cookie_api_v1_auth_logout_cookie_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     me_api_v1_auth_me_get: {
         parameters: {
             query?: never;
@@ -917,6 +984,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_cookie_api_v1_auth_refresh_cookie_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthOut"];
                 };
             };
         };

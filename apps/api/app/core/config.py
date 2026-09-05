@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     access_ttl: int = 900  # 15 min
     refresh_ttl: int = 2_592_000  # 30 days
     auth_rate_limit: int = 5  # requests per minute on credential endpoints
+    # --- httpOnly-cookie refresh transport (ADR-0008 addendum) --------------
+    # ``Secure`` attribute of the ``kh_refresh`` cookie. ALWAYS ON in real
+    # environments; flip to ``KHOROCH_REFRESH_COOKIE_SECURE=0`` only for the
+    # plain-http test client (http:// cannot carry Secure cookies).
+    refresh_cookie_secure: bool = True
 
     @model_validator(mode="after")
     def _resolve_jwt_secret(self) -> "Settings":

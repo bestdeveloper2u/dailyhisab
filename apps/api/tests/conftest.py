@@ -25,6 +25,10 @@ from sqlalchemy.pool import StaticPool
 # assume *before* app.main (and its lru_cached Settings) are imported below.
 os.environ["KHOROCH_ENV"] = "local"
 os.environ["KHOROCH_AUTH_RATE_LIMIT"] = "5"
+# Cookie endpoints (ADR-0008 addendum): the ASGI test client speaks plain
+# http, which cannot carry Secure cookies — turn the flag off for tests only
+# (prod default stays Secure=on; see Settings.refresh_cookie_secure).
+os.environ["KHOROCH_REFRESH_COOKIE_SECURE"] = "0"
 
 import app.models
 from app.core.deps import get_kv_dep

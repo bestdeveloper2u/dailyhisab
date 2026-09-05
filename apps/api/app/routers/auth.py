@@ -15,11 +15,16 @@ Session model in KV (see app/core/kv.py for the key layout):
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.core.cookies import (
+    REFRESH_COOKIE_NAME,
+    clear_refresh_cookie,
+    set_refresh_cookie,
+)
 from app.core.deps import get_current_session, get_kv_dep
 from app.core.kv import KV
 from app.core.security import (
@@ -146,8 +151,21 @@ async def login(body: LoginIn, request: Request, db: DbDep, kv: KvDep) -> AuthOu
 async def refresh(body: RefreshIn, request: Request, db: DbDep, kv: KvDep) -> AuthOut:
     """Rotate a refresh token; reuse of an old token revokes the session."""
     await enforce_rate_limit(kv, request, None)
+    profile, access, refresh_raw = await _rotate_refresh(kv, db, body.refresh_token)
+    return _auth_out(profile, access, refresh_raw)
+
+
+async def _rotate_refresh(
+    kv: KV, db: AsyncSession, presented_raw: str
+) -> tuple[Profile, str, str]:
+    """Validate + rotate a presented refresh token (shared by both transports).
+
+    The JSON endpoint and ``/auth/refresh-cookie`` must behave IDENTICALLY:
+    same KV keys, same reuse-detection (family kill), same status codes and
+    detail messages. Returns ``(profile, access_token, new_refresh_raw)``.
+    """
     settings = get_settings()
-    presented = sha256_hex(body.refresh_token)
+    presented = sha256_hex(presented_raw)
 
     sid = await kv.get(f"rt:{presented}")
     if sid is None:
@@ -191,7 +209,54 @@ async def refresh(body: RefreshIn, request: Request, db: DbDep, kv: KvDep) -> Au
     )
     await kv.setex(f"rt:{refresh_hash}", settings.refresh_ttl, sid)
     access = create_access_token(profile_id_raw, sid)
+    return profile, access, refresh_raw
+
+
+@router.post("/refresh-cookie", response_model=AuthOut)
+async def refresh_cookie(
+    request: Request, response: Response, db: DbDep, kv: KvDep
+) -> AuthOut:
+    """Rotate the refresh token carried in the ``kh_refresh`` httpOnly cookie.
+
+    Identical semantics to ``POST /auth/refresh`` (same KV keys, same reuse
+    detection); the rotated token is returned in the body AND set as the new
+    cookie (HttpOnly, Secure, SameSite=Lax, path=/api/v1/auth). Absent
+    cookie → 401.
+    """
+    await enforce_rate_limit(kv, request, None)
+    presented_raw = request.cookies.get(REFRESH_COOKIE_NAME)
+    if presented_raw is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing refresh token cookie",
+        )
+    profile, access, refresh_raw = await _rotate_refresh(kv, db, presented_raw)
+    set_refresh_cookie(response, refresh_raw)
     return _auth_out(profile, access, refresh_raw)
+
+
+@router.post("/logout-cookie", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_cookie(request: Request, response: Response, kv: KvDep) -> None:
+    """Clear the refresh cookie and revoke the session it points at (204).
+
+    Idempotent: a missing/unknown cookie still clears the cookie and answers
+    204. Revocation mirrors ``POST /auth/logout`` (session record + current
+    refresh token die together).
+    """
+    clear_refresh_cookie(response)
+    presented_raw = request.cookies.get(REFRESH_COOKIE_NAME)
+    if presented_raw is None:
+        return
+    presented = sha256_hex(presented_raw)
+    sid = await kv.get(f"rt:{presented}")
+    if sid is None:  # unknown/garbage cookie — nothing to revoke
+        return
+    sess_value = await kv.get(f"sess:{sid}")
+    if sess_value is not None:
+        _, current_hash = _split_sess(sess_value)
+        await kv.delete(f"sess:{sid}", f"rt:{current_hash}")
+    else:  # dead session: drop the stale tombstone too
+        await kv.delete(f"sess:{sid}", f"rt:{presented}")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
