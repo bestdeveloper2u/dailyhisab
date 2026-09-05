@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 
 import { AuthProvider, useAuth } from "../lib/auth";
+import { ErrorBoundary } from "../lib/ErrorBoundary";
 import { PrefsProvider, usePrefs } from "../lib/prefs";
 import { theme } from "../lib/theme";
 
@@ -37,7 +38,11 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <PrefsProvider>
-        <RootNavigator />
+        {/* T13.2: inside the providers so the fallback can use theme tokens
+            and the active language; wraps the whole screen tree below. */}
+        <ErrorBoundary>
+          <RootNavigator />
+        </ErrorBoundary>
       </PrefsProvider>
     </AuthProvider>
   );
