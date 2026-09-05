@@ -11,6 +11,7 @@ import {
   type AuthSession,
   type User,
 } from "@khoroch/api-client";
+import { configureCookieAuth, logoutCookie, refreshCookieSession } from "../lib/auth-cookie";
 
 export type AuthStatus = "loading" | "authed" | "anon";
 
@@ -33,10 +34,14 @@ interface AuthState {
    */
   accessToken: string | null;
   /**
-   * SECURITY TRADEOFF (documented): the refresh token is persisted to
-   * localStorage under REFRESH_KEY, which is readable by any injected
-   * script (XSS). This is deliberate for the current cycle — pending
-   * httpOnly-cookie refresh endpoints on the API. Revisit before prod.
+   * REFRESH TRANSPORT (ADR-0008 adopted — T12.3): the refresh token is
+   * still persisted to localStorage under REFRESH_KEY (JSON transport,
+   * shared with the mobile app) and remains readable by injected scripts
+   * (XSS). The web app now ALSO holds it in an HttpOnly cookie that JS
+   * cannot read: boot restore and 401 recovery fall back to the cookie
+   * whenever the JSON transport has nothing to answer with (see
+   * lib/auth-cookie.ts). The localStorage copy is therefore a fallback
+   * transport, no longer the only way back into a session.
    */
   refreshToken: string | null;
   status: AuthStatus;
@@ -86,18 +91,48 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
           // me() failed — the client middleware already attempted one silent
-          // refresh and, on failure, dispatched auth-expired which cleared us.
+          // refresh (JSON, then the cookie fallback) and, on total failure,
+          // dispatched auth-expired which cleared us.
         }
-        // 2) Cold start: rotate the persisted refresh token. The refresh
-        //    response carries the user, so no separate me() call is needed.
+        // 2) Cold start, JSON transport: rotate the persisted refresh token.
+        //    The refresh response carries the user, so no separate me() call
+        //    is needed.
         const refreshToken = get().refreshToken;
-        if (!refreshToken) {
-          set({ status: "anon" });
+        if (refreshToken) {
+          const res = await apiRefresh(refreshToken);
+          if (res.ok) {
+            setSession(set, res.data);
+            return;
+          }
+          if (res.status !== 401 && res.status !== 403) {
+            // Transient failure (network / 5xx): the cookie may hold a
+            // tombstoned token whose replay trips reuse detection and revokes
+            // an otherwise-live family — do NOT probe it (see lib/auth-cookie.ts).
+            clearSession(set);
+            return;
+          }
+        }
+        // 3) ADR-0008 (T12.3): the HttpOnly cookie may still hold a valid
+        //    refresh token even when localStorage was cleared (private mode,
+        //    storage purge) or the persisted token was rejected above. One
+        //    silent probe — on success this looks exactly like the JSON path.
+        const session = await refreshCookieSession();
+        if (session) {
+          setSession(set, session);
           return;
         }
-        const res = await apiRefresh(refreshToken);
-        if (res.ok) setSession(set, res.data);
-        else clearSession(set);
+        // 4) Both transports exhausted → anonymous.
+        if (refreshToken) {
+          clearSession(set);
+          // A persisted session died on both transports — announce it so
+          // listeners drop whatever is left. A tokenless cold start stays
+          // quiet: nothing expired, there was never a session here.
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+          }
+        } else {
+          set({ status: "anon" });
+        }
       },
 
       login: async (email, password) => {
@@ -115,6 +150,9 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        // ADR-0008 (T12.3): clear the httpOnly cookie too — fire-and-forget,
+        // the endpoint is idempotent (204 even without a cookie).
+        logoutCookie();
         try {
           // Best-effort server revocation; a 401 here means the client
           // middleware already refreshed (or expired us) — either way we clear.
@@ -164,6 +202,14 @@ configureAuth({
   getRefreshToken: () => useAuthStore.getState().refreshToken,
   onTokenRefresh: ({ accessToken, refreshToken }) =>
     useAuthStore.setState({ accessToken, refreshToken }),
+});
+
+// ADR-0008 (T12.3): register the httpOnly-cookie transport as the client's
+// one-shot refresh fallback, persisting rotated pairs it rescues (same shape
+// the JSON path persists via onTokenRefresh).
+configureCookieAuth({
+  onSession: ({ user, accessToken, refreshToken }) =>
+    useAuthStore.setState({ user, accessToken, refreshToken }),
 });
 
 // A failed silent refresh anywhere in the app drops the local session.

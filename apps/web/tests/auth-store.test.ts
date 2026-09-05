@@ -102,18 +102,22 @@ describe("auth store", () => {
     );
   });
 
-  it("logout revokes server-side, clears state and localStorage", async () => {
+  it("logout revokes server-side (JSON + cookie), clears state and localStorage", async () => {
     useAuthStore.setState({
       user: USER,
       accessToken: "access-1",
       refreshToken: "refresh-1",
       status: "authed",
     });
-    stubFetch([{ status: 204 }]);
+    stubFetch([{ status: 204 }, { status: 204 }]);
 
     await useAuthStore.getState().logout();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // T12.3: the httpOnly cookie is cleared alongside the JSON logout
+    const urls = fetchMock.mock.calls.map((call) => (call[0] as Request).url);
+    expect(urls.some((u) => u.includes("/api/v1/auth/logout-cookie"))).toBe(true);
+    expect(urls.some((u) => u.includes("/api/v1/auth/logout"))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(useAuthStore.getState().status).toBe("anon");
     expect(useAuthStore.getState().user).toBeNull();
     expect(useAuthStore.getState().accessToken).toBeNull();
@@ -138,13 +142,18 @@ describe("auth store", () => {
     );
   });
 
-  it("bootstrap without any stored token ends anon without network calls", async () => {
-    stubFetch([]);
+  it("bootstrap without any stored token probes the cookie once, then ends anon", async () => {
+    // T12.3: with empty localStorage the HttpOnly cookie may still hold a
+    // valid session — bootstrap probes it once; 401 → anon, no JSON refresh.
+    stubFetch([{ status: 401 }]);
 
     await useAuthStore.getState().bootstrap();
 
     expect(useAuthStore.getState().status).toBe("anon");
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = (fetchMock.mock.calls[0]![0] as Request).url;
+    expect(url).toContain("/api/v1/auth/refresh-cookie");
   });
 
   it("a me() 401 that cannot be refreshed collapses the session to anon", async () => {

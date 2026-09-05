@@ -12,6 +12,11 @@
  *    rotation-aware) and retries the original request with the new token.
  *    The retry uses raw `fetch` so it can never re-enter this middleware —
  *    no loops.
+ *  - The refresh itself is JSON-first (ADR-0008, T12.3): it rotates the
+ *    persisted token via `/auth/refresh`, and only when that transport has
+ *    nothing to answer with (no persisted token, or a 401/403 rejection) it
+ *    falls back ONCE to the configured `refreshFromCookie` callback (the web
+ *    app registers the httpOnly-cookie transport; mobile leaves it unset).
  *  - If the refresh fails (revoked/unknown token), `khoroch:auth-expired`
  *    is dispatched on `window` and the original 401 is returned; the app
  *    store listens for the event and drops the session.
@@ -42,6 +47,11 @@ const PUBLIC_AUTH_PATHS: ReadonlySet<string> = new Set([
   "/api/v1/auth/login",
   "/api/v1/auth/register",
   "/api/v1/auth/refresh",
+  // Cookie transports (T12.3): authenticated by the HttpOnly `kh_refresh`
+  // cookie, never a Bearer header — and their own 401s are final answers
+  // (a failing cookie probe must not recurse into refresh handling).
+  "/api/v1/auth/refresh-cookie",
+  "/api/v1/auth/logout-cookie",
 ]);
 
 /**
@@ -53,6 +63,14 @@ interface AuthHandlers {
   getRefreshToken: () => string | null | undefined;
   /** Called with the rotated pair after a successful silent refresh. */
   onTokenRefresh?: (tokens: AuthTokens) => void;
+  /**
+   * ADR-0008 (T12.3): cookie-transport fallback, tried ONCE per refresh when
+   * the JSON transport has nothing to answer with (no persisted refresh
+   * token, or the server rejected it with 401/403). Resolves the rotated
+   * session, or `null` on any failure — must never throw. Registered by the
+   * web app (`configureCookieAuth`); unset on mobile → behaviour unchanged.
+   */
+  refreshFromCookie?: () => Promise<AuthSession | null>;
 }
 
 const auth: AuthHandlers = {
@@ -124,21 +142,49 @@ export const api = createClient<paths>({
 // Single-flight: concurrent 401s share one refresh call.
 let refreshInFlight: Promise<AuthSession | null> | null = null;
 
+/**
+ * ONE silent refresh, JSON-first (ADR-0008, T12.3):
+ *  1. rotate the persisted refresh token via `POST /auth/refresh`;
+ *  2. only when the JSON transport has nothing to answer with — no persisted
+ *     token, or a definitive server rejection (401/403) — fall back ONCE to
+ *     the configured `refreshFromCookie` callback.
+ * Single-flight still holds across both paths: concurrent callers share this
+ * one promise, so a refresh storm costs one JSON attempt + at most one cookie
+ * probe — never one per path per caller.
+ *
+ * Network-level JSON failures do NOT trigger the cookie probe: if the server
+ * is unreachable the probe fails anyway, and probing with a stale tombstoned
+ * cookie could trip the server's reuse detection and revoke an otherwise
+ * live session family (see apps/web/src/lib/auth-cookie.ts).
+ */
 async function refreshSession(): Promise<AuthSession | null> {
   refreshInFlight ??= (async () => {
-    const refreshToken = auth.getRefreshToken();
-    if (!refreshToken) return null;
-    // Goes through the middleware client, but /auth/refresh is in
-    // PUBLIC_AUTH_PATHS so its own 401 can never recurse into here.
-    const { data } = await api.POST("/api/v1/auth/refresh", {
-      body: { refreshToken },
-    });
-    if (!data) return null;
-    return {
-      user: data.user,
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-    };
+    let jsonExhausted = !auth.getRefreshToken();
+    if (!jsonExhausted) {
+      try {
+        // Goes through the middleware client, but /auth/refresh is in
+        // PUBLIC_AUTH_PATHS so its own 401 can never recurse into here.
+        const { data, response } = await api.POST("/api/v1/auth/refresh", {
+          body: { refreshToken: auth.getRefreshToken() as string },
+        });
+        if (data) {
+          return {
+            user: data.user,
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+          };
+        }
+        jsonExhausted = response.status === 401 || response.status === 403;
+      } catch {
+        // network-level failure — keep the cookie transport out of it
+      }
+    }
+    if (!jsonExhausted) return null;
+    try {
+      return (await auth.refreshFromCookie?.()) ?? null;
+    } catch {
+      return null; // a broken cookie callback must not break the contract
+    }
   })().finally(() => {
     refreshInFlight = null;
   });
