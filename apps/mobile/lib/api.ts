@@ -410,3 +410,76 @@ export async function payDebt(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
+
+// --- Budgets (Phase 3, ADR-0004 / T10.1) --------------------------------------
+
+/** Per-category budget vs actual spend for one month (BudgetCatUsage). */
+export interface BudgetCatUsage {
+  /** Category limit for the month — decimal string "8000.00". */
+  budget: string;
+  /** Actual spend in the category — decimal string. */
+  spent: string;
+  /** spent / budget × 100 as a JSON number (can exceed 100 when over). */
+  usage_pct: number;
+}
+
+/**
+ * GET/PUT /api/v1/budgets payload: the stored budget merged with that
+ * month's spending. Money values are decimal STRINGS ("1234.50");
+ * `by_cat` maps category name → BudgetCatUsage.
+ */
+export interface Budget {
+  /** "YYYY-MM" the usage was computed for. */
+  ym: string;
+  /** Stored monthly limit — decimal string, "0.00" when never set. */
+  total: string;
+  /** Stored per-category limits: cat → decimal string (may be empty). */
+  cats: Record<string, string>;
+  /** Total spend in `ym` — decimal string. */
+  spent: string;
+  /** spent / total × 100 as a JSON number (can exceed 100 when over). */
+  usage_pct: number;
+  by_cat: Record<string, BudgetCatUsage>;
+}
+
+/**
+ * PUT /api/v1/budgets body — both fields optional (partial upsert).
+ * Values must match ^\d{1,10}\.\d{2}$ — e.g. "890.00".
+ * NOTE: a non-null `cats` REPLACES the whole per-category map, so callers
+ * editing one category must send the full merged map.
+ */
+export interface BudgetPutInput {
+  total?: string | null;
+  cats?: Record<string, string> | null;
+}
+
+/**
+ * GET /api/v1/budgets?ym=YYYY-MM (Bearer access) → 200 Budget;
+ * 400 invalid ym; 422 validation. `ym` omitted → server default (current).
+ */
+export async function getBudget(
+  accessToken: string,
+  ym?: string,
+): Promise<Budget> {
+  const suffix = ym !== undefined ? `?ym=${encodeURIComponent(ym)}` : "";
+  return request<Budget>(`/api/v1/budgets${suffix}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/**
+ * PUT /api/v1/budgets (Bearer access) → 200 upserted Budget (the GET view
+ * for the CURRENT month); 422 validation. Upserts the single stored budget
+ * row — month-agnostic; viewing another month only changes GET usage.
+ */
+export async function putBudget(
+  accessToken: string,
+  body: BudgetPutInput,
+): Promise<Budget> {
+  return request<Budget>("/api/v1/budgets", {
+    method: "PUT",
+    body: JSON.stringify(body),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}

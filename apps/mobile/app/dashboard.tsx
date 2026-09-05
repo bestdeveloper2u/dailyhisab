@@ -216,6 +216,20 @@ export default function Dashboard() {
 
         <Pressable
           style={({ pressed }) => [
+            styles.debtsButton,
+            pressed && styles.debtsButtonPressed,
+          ]}
+          onPress={() => router.push("/budget")}
+          accessibilityRole="button"
+          accessibilityLabel={STRINGS.bn.budgetTitle}
+        >
+          <Text style={styles.debtsButtonLabel}>
+            {STRINGS.bn.budgetTitle} →
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
             styles.backButton,
             pressed && styles.backButtonPressed,
           ]}

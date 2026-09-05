@@ -17,8 +17,9 @@ function RootNavigator() {
     <>
       <StatusBar style="dark" backgroundColor={theme.colors.ivory} />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Explicit registration keeps the Report route in the typed manifest. */}
+        {/* Explicit registration keeps these routes in the typed manifest. */}
         <Stack.Screen name="report" />
+        <Stack.Screen name="budget" />
       </Stack>
     </>
   );
