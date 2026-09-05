@@ -11,6 +11,7 @@ import {
   type Theme,
 } from "../store/theme";
 import { w } from "../lib/web-i18n";
+import { usePageTitle } from "../lib/usePageTitle";
 
 const THEME_OPTIONS = [
   { value: "light", labelKey: "light" },
@@ -23,6 +24,7 @@ const MOTION_OPTIONS = [
 ] as const satisfies ReadonlyArray<{ value: Motion; labelKey: "on" | "off" }>;
 
 export function Settings() {
+  usePageTitle("সেটিংস · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);

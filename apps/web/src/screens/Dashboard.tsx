@@ -1,4 +1,4 @@
-import { formatTaka, toBnDigits, type Lang } from "@khoroch/core";
+import { toBnDigits, type Lang } from "@khoroch/core";
 import { Link, useNavigate } from "react-router";
 import { useBudget, useMonthlyReport, useYearlyReport } from "../lib/queries";
 import {
@@ -11,15 +11,13 @@ import {
   todayIso,
 } from "../lib/catalog";
 import { W } from "../lib/web-i18n";
+import { fmtTaka } from "../lib/money";
+import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 
 /** "YYYY-MM" for the current month, UTC — the API's ?ym= domain. */
 function currentYm(): string {
   return new Date().toISOString().slice(0, 7);
-}
-
-function fmtMoney(v: string, lang: Lang): string {
-  return formatTaka(v, lang);
 }
 
 function fmtPct(p: number, lang: Lang): string {
@@ -103,6 +101,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function Dashboard() {
+  usePageTitle("ড্যাশবোর্ড · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const navigate = useNavigate();
 
@@ -211,23 +210,23 @@ export function Dashboard() {
           <div className="mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
             <StatCard
               label={W[lang].statToday}
-              amount={fmtMoney(todayTotal, lang)}
+              amount={fmtTaka(todayTotal, lang)}
               lang={lang}
             />
             <StatCard
               label={`${W[lang].statMonth} (${monthLabel(ym, lang).split(" ")[0]})`}
-              amount={fmtMoney(report.total, lang)}
+              amount={fmtTaka(report.total, lang)}
               delta={delta}
               lang={lang}
             />
             <StatCard
               label={`${W[lang].statPrev} (${monthLabel(prevYm, lang).split(" ")[0]})`}
-              amount={fmtMoney(prev?.total ?? "0.00", lang)}
+              amount={fmtTaka(prev?.total ?? "0.00", lang)}
               lang={lang}
             />
             <StatCard
               label={`${W[lang].statYear} ${lang === "bn" ? toBnDigits(String(year)) : year}`}
-              amount={fmtMoney(yearly?.total ?? "0.00", lang)}
+              amount={fmtTaka(yearly?.total ?? "0.00", lang)}
               lang={lang}
             />
           </div>
@@ -268,7 +267,7 @@ export function Dashboard() {
               <>
                 <span className="text-[13px] font-medium text-muted">
                   {W[lang].budProg} — {monthLabel(ym, lang)} ({W[lang].limitLbl}{" "}
-                  {fmtMoney(budget.total, lang)})
+                  {fmtTaka(budget.total, lang)})
                 </span>
                 <div className="mt-2.5 h-3.5 overflow-hidden rounded-full bg-surface-2">
                   <div
@@ -280,10 +279,10 @@ export function Dashboard() {
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[12.5px] font-medium tabular-nums text-muted">
-                    {t2(lang, "spent")}: {fmtMoney(budget.spent, lang)}
+                    {t2(lang, "spent")}: {fmtTaka(budget.spent, lang)}
                   </span>
                   <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[12.5px] font-medium tabular-nums text-muted">
-                    {t2(lang, "budgetLeft")}: {fmtMoney(budgetLeftStr, lang)}
+                    {t2(lang, "budgetLeft")}: {fmtTaka(budgetLeftStr, lang)}
                   </span>
                   <span className="rounded-full bg-emerald-soft px-2.5 py-1 text-[12.5px] font-semibold text-emerald">
                     {W[lang].dataSafe} ✓
@@ -326,7 +325,7 @@ export function Dashboard() {
                     {W[lang].cmpThis} · {monthLabel(ym, lang)}
                   </p>
                   <p className="mt-0.5 text-[21px] font-extrabold tabular-nums text-ink">
-                    {fmtMoney(report.total, lang)}
+                    {fmtTaka(report.total, lang)}
                   </p>
                   <p className="text-xs text-muted">
                     {report.count} {W[lang].entries}
@@ -337,7 +336,7 @@ export function Dashboard() {
                     {W[lang].cmpPrev} · {monthLabel(prevYm, lang)}
                   </p>
                   <p className="mt-0.5 text-[21px] font-extrabold tabular-nums text-ink">
-                    {fmtMoney(prev?.total ?? "0.00", lang)}
+                    {fmtTaka(prev?.total ?? "0.00", lang)}
                   </p>
                   <p className="text-xs text-muted">
                     {prev?.count ?? 0} {W[lang].entries}
@@ -350,7 +349,7 @@ export function Dashboard() {
                       cmpDown ? "text-emerald" : "text-danger"
                     }`}
                   >
-                    {cmpDown ? "↓" : "↑"} {fmtMoney(String(Math.abs(cmpDiffNum)), lang)}
+                    {cmpDown ? "↓" : "↑"} {fmtTaka(String(Math.abs(cmpDiffNum)), lang)}
                   </p>
                   <p
                     className={`text-xs font-bold ${
@@ -390,7 +389,7 @@ export function Dashboard() {
                           {fmtPct(r.pct, lang)}
                         </span>
                         <span className="font-bold tabular-nums text-ink">
-                          {fmtMoney(r.amt, lang)}
+                          {fmtTaka(r.amt, lang)}
                         </span>
                       </div>
                       <div className="h-[7px] overflow-hidden rounded-full bg-surface-2">
@@ -418,7 +417,7 @@ export function Dashboard() {
                       className="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
                     >
                       <span className="text-[11px] tabular-nums text-muted">
-                        {fmtMoney(String(t.total), lang)}
+                        {fmtTaka(String(t.total), lang)}
                       </span>
                       <div
                         className={`w-full max-w-[30px] rounded-t-md ${

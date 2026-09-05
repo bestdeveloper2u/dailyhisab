@@ -5,6 +5,7 @@ import { Logo } from "../components/Logo";
 import { useAuthStore } from "../store/auth";
 import { useLangStore } from "../store/lang";
 import { l } from "./login.i18n";
+import { usePageTitle } from "../lib/usePageTitle";
 
 const inputClass =
   "rounded-control border border-line bg-ivory px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-emerald focus:outline-none";
@@ -15,6 +16,7 @@ const inputClass =
  * in an error banner. Demo credentials are seeded by apps/api scripts.
  */
 export function Login() {
+  usePageTitle("লগইন · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const navigate = useNavigate();
   const location = useLocation();

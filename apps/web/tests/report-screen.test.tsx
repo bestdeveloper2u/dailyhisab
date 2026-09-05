@@ -62,7 +62,7 @@ describe("Report screen", () => {
 
     // KPI row: total, entry count, top day.
     // Total KPI + the by-group bar amount both render this money string.
-    expect(screen.getAllByText("৳২,৩৪০.৫০")).toHaveLength(2);
+    expect(screen.getAllByText("৳২,৩৪০.৫")).toHaveLength(2);
     expect(screen.getByText("২")).toBeInTheDocument();
     expect(
       screen.getByText(`${dayLabel(`${state.monthYm}-04`, "bn")} · ৳২,০০০`),
@@ -87,7 +87,7 @@ describe("Report screen", () => {
     expect(await screen.findByText("মাসভিত্তিক ট্রেন্ড")).toBeInTheDocument();
     expect(state.year).toMatch(/^\d{4}$/);
     expect(screen.getByText(toBnDigits(state.year))).toBeInTheDocument();
-    expect(screen.getByText("৳৩২,৩৪০.৫০")).toBeInTheDocument();
+    expect(screen.getByText("৳৩২,৩৪০.৫")).toBeInTheDocument();
     expect(screen.getByText("১২")).toBeInTheDocument();
     expect(screen.getByText(`${monthLabel(`${state.year}-08`, "bn")} · ৳৩০,০০০`)).toBeInTheDocument();
 

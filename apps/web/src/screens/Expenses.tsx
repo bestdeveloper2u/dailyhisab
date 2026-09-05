@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { formatTaka, moneyToNumber, t, toBnDigits } from "@khoroch/core";
+import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
 import type { Expense } from "@khoroch/api-client";
 import { useExpensesInfinite, useExpenseMutations } from "../lib/queries";
 import {
@@ -14,6 +14,8 @@ import {
   ymRange,
 } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
+import { fmtTaka } from "../lib/money";
+import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 import { downloadCsv, expensesToCsv } from "../lib/csv";
 import { ExpenseForm } from "../components/ExpenseForm";
@@ -114,6 +116,7 @@ function DeleteButton({ expense }: { expense: Expense }) {
  * sums, inline edit/delete, and the voice/manual add flows.
  */
 export function Expenses() {
+  usePageTitle("খরচ তালিকা · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -253,7 +256,7 @@ export function Expenses() {
             : `${rows.length} ${w(lang, "entries")}`}
         </span>
         <span className="font-bold tabular-nums text-ink">
-          {formatTaka(loadedTotal, lang)}
+          {fmtTaka(loadedTotal, lang)}
         </span>
       </div>
 
@@ -292,7 +295,7 @@ export function Expenses() {
                 {group.iso === today ? w(lang, "today") : dayLabel(group.iso, lang)}
               </span>
               <span className="font-semibold tabular-nums text-muted">
-                {formatTaka(group.sum, lang)}
+                {fmtTaka(group.sum, lang)}
               </span>
             </div>
             <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-card">
@@ -306,7 +309,7 @@ export function Expenses() {
                     </p>
                   </div>
                   <span className="text-sm font-bold tabular-nums text-ink">
-                    {formatTaka(row.amt, lang)}
+                    {fmtTaka(row.amt, lang)}
                   </span>
                   <button
                     type="button"

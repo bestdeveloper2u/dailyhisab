@@ -59,10 +59,10 @@ describe("Expenses screen (real API shapes)", () => {
     expect(await screen.findByText("মাছ")).toBeInTheDocument();
     expect(screen.getByText("চাল")).toBeInTheDocument();
     expect(screen.getByText("৳৮৯০")).toBeInTheDocument();
-    expect(screen.getByText("৳১,৪৫০.৫০")).toBeInTheDocument();
+    expect(screen.getByText("৳১,৪৫০.৫")).toBeInTheDocument();
     // 2 entries + total 2340.50 (header total AND the day-group sum coincide).
     expect(screen.getByText("২ এন্ট্রি")).toBeInTheDocument();
-    expect(screen.getAllByText("৳২,৩৪০.৫০")).toHaveLength(2);
+    expect(screen.getAllByText("৳২,৩৪০.৫")).toHaveLength(2);
   });
 
   it("loads the next keyset page via the cursor", async () => {

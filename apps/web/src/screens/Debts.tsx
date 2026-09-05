@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { formatTaka, moneyToNumber, t, toBnDigits } from "@khoroch/core";
+import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
 import type { Debt } from "@khoroch/api-client";
 import { useDebtMutations, useDebtsInfinite } from "../lib/queries";
 import { dayLabel, normalizeAmount, todayIso } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
+import { fmtTaka } from "../lib/money";
+import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 import { Modal } from "../components/Modal";
 import { toast } from "../lib/toast";
@@ -84,7 +86,7 @@ function PayModal({ debt, onClose }: { debt: Debt; onClose: () => void }) {
             const message =
               res.data.status === "FULL"
                 ? w(lang, "dPaidFull")
-                : `${w(lang, "dPaidPartial")} ${formatTaka(res.data.debt.amt, lang)}`;
+                : `${w(lang, "dPaidPartial")} ${fmtTaka(res.data.debt.amt, lang)}`;
             setFeedback(message);
             toast(message);
             setTimeout(() => onClose(), 900);
@@ -109,7 +111,7 @@ function PayModal({ debt, onClose }: { debt: Debt; onClose: () => void }) {
         <div>
           <h2 className="text-lg font-bold">{w(lang, "dPayTitle")}</h2>
           <p className="mt-0.5 text-[13px] text-muted">
-            {debt.party} · {formatTaka(debt.amt, lang)}
+            {debt.party} · {fmtTaka(debt.amt, lang)}
           </p>
         </div>
         <div>
@@ -129,7 +131,7 @@ function PayModal({ debt, onClose }: { debt: Debt; onClose: () => void }) {
             onClick={() => setAmt(moneyToNumber(debt.amt).toString())}
             className="mt-2 rounded-full border border-emerald bg-emerald-soft px-3 py-1 text-xs font-bold text-emerald hover:brightness-95"
           >
-            {w(lang, "dPayFull")} — {formatTaka(debt.amt, lang)}
+            {w(lang, "dPayFull")} — {fmtTaka(debt.amt, lang)}
           </button>
         </div>
         {error && (
@@ -199,7 +201,7 @@ function DebtRow({ debt, onPay }: { debt: Debt; onPay: (debt: Debt) => void }) {
         </p>
       </div>
       <span className={`text-sm font-bold tabular-nums ${lend ? "text-emerald" : "text-danger"}`}>
-        {formatTaka(debt.amt, lang)}
+        {fmtTaka(debt.amt, lang)}
       </span>
       {!settled && (
         <button
@@ -221,6 +223,7 @@ function DebtRow({ debt, onPay }: { debt: Debt; onPay: (debt: Debt) => void }) {
  * all against the real /api/v1/debts endpoints.
  */
 export function Debts() {
+  usePageTitle("ধার · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const { create } = useDebtMutations();
   const [status, setStatus] = useState<StatusTab>("open");
@@ -291,13 +294,13 @@ export function Debts() {
         <div className="rounded-card border border-line bg-surface p-5 shadow-card">
           <p className="text-[13px] font-medium text-muted">{w(lang, "dIn")}</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-emerald">
-            {formatTaka(totalIn, lang)}
+            {fmtTaka(totalIn, lang)}
           </p>
         </div>
         <div className="rounded-card border border-line bg-surface p-5 shadow-card">
           <p className="text-[13px] font-medium text-muted">{w(lang, "dOut")}</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-danger">
-            {formatTaka(totalOut, lang)}
+            {fmtTaka(totalOut, lang)}
           </p>
         </div>
       </div>

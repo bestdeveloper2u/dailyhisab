@@ -105,12 +105,12 @@ describe("Budget screen", () => {
     // First fetch requests the current month (?ym=YYYY-MM).
     expect(state.gets[0]).toBe(`/api/v1/budgets?ym=${ymOfIso(todayIso())}`);
     expect(state.ym).toMatch(/^\d{4}-\d{2}$/);
-    expect(screen.getByText("খরচ: ৳৫,২৩৪.৫০ (26%)")).toBeInTheDocument();
-    expect(screen.getByText("বাকি: ৳১৪,৭৬৫.৫০")).toBeInTheDocument();
+    expect(screen.getByText("খরচ: ৳৫,২৩৪.৫ (26%)")).toBeInTheDocument();
+    expect(screen.getByText("বাকি: ৳১৪,৭৬৫.৫")).toBeInTheDocument();
 
     // Category rows: good tag under 75%, over tag past 100%.
     expect(screen.getByText("খাদ্য ও মুদি")).toBeInTheDocument();
-    expect(screen.getByText("৳৪,২৩৪.৫০ / ৳৮,০০০")).toBeInTheDocument();
+    expect(screen.getByText("৳৪,২৩৪.৫ / ৳৮,০০০")).toBeInTheDocument();
     expect(screen.getByText("ভালো")).toBeInTheDocument();
     expect(screen.getByText("যাতায়াত")).toBeInTheDocument();
     expect(screen.getByText("৳১,৫০০ / ৳১,০০০")).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe("Budget screen", () => {
     await waitFor(() => expect(state.puts).toHaveLength(1));
     expect(state.puts[0]).toEqual({ url: "/api/v1/budgets", body: { total: "25000.00" } });
     // Refetched view: 25000 − 5234.50 = 19765.50 left.
-    expect(await screen.findByText("বাকি: ৳১৯,৭৬৫.৫০")).toBeInTheDocument();
+    expect(await screen.findByText("বাকি: ৳১৯,৭৬৫.৫")).toBeInTheDocument();
   });
 
   it("editing a category limit PUTs the whole cats map", async () => {

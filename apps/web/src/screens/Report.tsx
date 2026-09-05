@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { formatTaka, moneyToNumber, t, toBnDigits } from "@khoroch/core";
+import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
 import { useMonthlyReport, useYearlyReport } from "../lib/queries";
 import {
   dayLabel,
@@ -10,6 +10,8 @@ import {
   ymOfIso,
 } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
+import { fmtTaka } from "../lib/money";
+import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 
 function Kpi({ label, value }: { label: string; value: string }) {
@@ -43,7 +45,7 @@ function GroupBars({ byGroup, lang }: { byGroup: Record<string, string>; lang: "
             <span className="tabular-nums text-muted">
               {total > 0 ? `${Math.round((n / total) * 100)}%` : "—"}
             </span>
-            <span className="font-bold tabular-nums text-ink">{formatTaka(amt, lang)}</span>
+            <span className="font-bold tabular-nums text-ink">{fmtTaka(amt, lang)}</span>
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
             <div
@@ -78,7 +80,7 @@ function TrendBars({
       {data.map((d, i) => (
         <div key={d.key} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
           <div
-            title={formatTaka(d.amt, lang)}
+            title={fmtTaka(d.amt, lang)}
             className={`w-full max-w-8 rounded-t-md ${values[i] > 0 ? "bg-emerald" : "bg-surface-2"}`}
             style={{ height: `${Math.max(3, (values[i] / max) * 100)}%` }}
           />
@@ -165,16 +167,16 @@ function MonthlyView({ thisYm }: { thisYm: string }) {
       {report && (
         <>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Kpi label={w(lang, "totalSpend")} value={formatTaka(report.total, lang)} />
+            <Kpi label={w(lang, "totalSpend")} value={fmtTaka(report.total, lang)} />
             <Kpi
               label={w(lang, "entriesCount")}
               value={lang === "bn" ? toBnDigits(String(report.count)) : String(report.count)}
             />
-            <Kpi label={w(lang, "dailyAvg")} value={formatTaka(dailyAvg, lang)} />
+            <Kpi label={w(lang, "dailyAvg")} value={fmtTaka(dailyAvg, lang)} />
             {topDay ? (
               <Kpi
                 label={w(lang, "topDay")}
-                value={`${dayLabel(topDay.key, lang)} · ${formatTaka(topDay.amt, lang)}`}
+                value={`${dayLabel(topDay.key, lang)} · ${fmtTaka(topDay.amt, lang)}`}
               />
             ) : (
               <Kpi label={w(lang, "topDay")} value="—" />
@@ -243,16 +245,16 @@ function YearlyView({ thisYear }: { thisYear: number }) {
       {report && (
         <>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Kpi label={w(lang, "totalSpend")} value={formatTaka(report.total, lang)} />
+            <Kpi label={w(lang, "totalSpend")} value={fmtTaka(report.total, lang)} />
             <Kpi
               label={w(lang, "entriesCount")}
               value={lang === "bn" ? toBnDigits(String(report.count)) : String(report.count)}
             />
-            <Kpi label={w(lang, "monthlyAvg")} value={formatTaka(monthlyAvg, lang)} />
+            <Kpi label={w(lang, "monthlyAvg")} value={fmtTaka(monthlyAvg, lang)} />
             {topMonth ? (
               <Kpi
                 label={w(lang, "topMonth")}
-                value={`${monthLabel(topMonth.key, lang)} · ${formatTaka(topMonth.amt, lang)}`}
+                value={`${monthLabel(topMonth.key, lang)} · ${fmtTaka(topMonth.amt, lang)}`}
               />
             ) : (
               <Kpi label={w(lang, "topMonth")} value="—" />
@@ -288,6 +290,7 @@ function YearlyView({ thisYear }: { thisYear: number }) {
  * (total, count, by_month, by_group) aggregates from the cached report API.
  */
 export function Report() {
+  usePageTitle("রিপোর্ট · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const [mode, setMode] = useState<"monthly" | "yearly">("monthly");
   const today = todayIso();

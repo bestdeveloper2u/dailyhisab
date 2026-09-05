@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatTaka, moneyToNumber, t } from "@khoroch/core";
+import { moneyToNumber, t } from "@khoroch/core";
 import type { Budget } from "@khoroch/api-client";
 import { useBudget, useBudgetMutation } from "../lib/queries";
 import { groupName, monthLabel, normalizeAmount, shiftYm, todayIso, ymOfIso } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
+import { fmtTaka } from "../lib/money";
+import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 import { toast } from "../lib/toast";
 
@@ -123,7 +125,7 @@ function TotalCard({ budget, lang }: { budget: Budget; lang: "bn" | "en" }) {
       </div>
       <div className="mt-2.5 flex flex-wrap gap-2">
         <span className="rounded-full border border-line px-2.5 py-1 text-xs font-semibold tabular-nums text-ink">
-          {w(lang, "spentLbl")}: {formatTaka(budget.spent, lang)} ({Math.round(budget.usage_pct)}
+          {w(lang, "spentLbl")}: {fmtTaka(budget.spent, lang)} ({Math.round(budget.usage_pct)}
           %)
         </span>
         <span
@@ -132,8 +134,8 @@ function TotalCard({ budget, lang }: { budget: Budget; lang: "bn" | "en" }) {
           }`}
         >
           {over
-            ? `${w(lang, "overLim")} ${formatTaka(spentNum - totalNum, lang)}`
-            : `${w(lang, "leftLbl")}: ${formatTaka(left, lang)}`}
+            ? `${w(lang, "overLim")} ${fmtTaka(spentNum - totalNum, lang)}`
+            : `${w(lang, "leftLbl")}: ${fmtTaka(left, lang)}`}
         </span>
       </div>
       {error && (
@@ -195,7 +197,7 @@ function CatRow({ budget, cat, usage }: { budget: Budget; cat: string; usage: { 
           {tag.label}
         </span>
         <span className="text-[13px] font-semibold tabular-nums text-ink">
-          {formatTaka(usage.spent, lang)} / {formatTaka(usage.budget, lang)}
+          {fmtTaka(usage.spent, lang)} / {fmtTaka(usage.budget, lang)}
         </span>
         <input
           type="text"
@@ -236,6 +238,7 @@ function CatRow({ budget, cat, usage }: { budget: Budget; cat: string; usage: { 
  * total usage bar and per-category budgets — PUT /budgets on every edit.
  */
 export function Budget() {
+  usePageTitle("বাজেট · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const [ym, setYm] = useState(ymOfIso(todayIso()));
   const query = useBudget(ym);

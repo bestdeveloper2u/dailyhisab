@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import { formatTaka, toBnDigits } from "@khoroch/core";
+import { toBnDigits } from "@khoroch/core";
 import type { ParsedExpense } from "@khoroch/api-client";
 import { useExpenseMutations, useVoiceParse } from "../lib/queries";
 import { groupName, payName, todayIso } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
+import { fmtTaka } from "../lib/money";
 import { useLangStore } from "../store/lang";
 import { Modal } from "./Modal";
 import { toast } from "../lib/toast";
@@ -396,7 +397,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
             </ul>
             <p className="text-xs text-muted">
               {w(lang, "totalSpend")}:{" "}
-              {formatTaka(
+              {fmtTaka(
                 items.reduce((sum, it) => sum + (Number(it.amt) || 0), 0),
                 lang,
               )}
