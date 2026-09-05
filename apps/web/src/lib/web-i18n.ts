@@ -26,6 +26,11 @@ export const W = {
     errLoad: "খরচ লোড করা যায়নি — আবার চেষ্টা করুন",
     errRetry: "আবার চেষ্টা করুন",
     sumLoaded: "দেখানো সমষ্টি",
+    // dashboard
+    recent: "সাম্প্রতিক খরচ",
+    txCount: "লেনদেন",
+    noBudget: "বাজেট সেট করা নেই",
+    viewAll: "সব দেখুন",
     // form
     addTitle: "খরচ যোগ করুন",
     editTitle: "খরচ সম্পাদনা",
@@ -142,6 +147,11 @@ export const W = {
     errLoad: "Could not load expenses — please retry",
     errRetry: "Retry",
     sumLoaded: "Loaded total",
+    // dashboard
+    recent: "Recent expenses",
+    txCount: "Transactions",
+    noBudget: "No budget set",
+    viewAll: "View all",
     // form
     addTitle: "Add expense",
     editTitle: "Edit expense",
