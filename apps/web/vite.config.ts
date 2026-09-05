@@ -2,6 +2,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 /*
  * No react/react-dom resolve aliases and no vitest `server.deps.inline` list.
@@ -15,7 +16,64 @@ import tailwindcss from "@tailwindcss/vite";
  */
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    /*
+     * PWA offline support (ticket T9.1).
+     *
+     * Precache: the built app-shell only (hashed JS/CSS, index.html, icons,
+     * fonts) so the UI boots with zero network. Navigation requests fall back
+     * to the precached index.html (SPA deep links work offline), except for
+     * /api/** which must ALWAYS hit the network — financial data is never
+     * served stale from a cache.
+     *
+     * Runtime caching: deliberately NONE. Unmatched requests (every /api/v1/*
+     * call) bypass the workbox router entirely and go straight to the network,
+     * so balances, expenses and debts can never be answered from cache.
+     */
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.png", "apple-touch-icon.png"],
+      manifest: {
+        name: "দৈনিক হিসাব",
+        short_name: "Daily Hisab",
+        description:
+          "দৈনিক খরচের হিসাব রাখার সহজ অ্যাপ — অফলাইনেও কাজ করে।",
+        lang: "bn",
+        dir: "ltr",
+        display: "standalone",
+        start_url: "/",
+        // Colors from the frozen prototype palette (www/index.html :root).
+        theme_color: "#0E6B50",
+        background_color: "#F6F5F1",
+        icons: [
+          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
+          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
+          {
+            src: "pwa-maskable-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "pwa-maskable-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,png,svg,ico,woff,woff2}"],
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//],
+      },
+      devOptions: {
+        enabled: false,
+      },
+    }),
+  ],
   server: {
     host: "127.0.0.1",
     port: 5173,

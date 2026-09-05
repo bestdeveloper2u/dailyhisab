@@ -2,9 +2,15 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { registerSW } from "virtual:pwa-register";
 import App from "./App";
 import { useAuthStore } from "./store/auth";
 import "./index.css";
+
+// PWA (T9.1): autoUpdate — the SW activates as soon as a new version is
+// precached; no user-facing update prompt this cycle. No-op in dev and in
+// browsers without service-worker support.
+registerSW({ immediate: true });
 
 const queryClient = new QueryClient({
   defaultOptions: {

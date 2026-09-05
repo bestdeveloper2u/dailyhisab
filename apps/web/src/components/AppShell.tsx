@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { useEffect, useRef } from "react";
 import { t } from "@khoroch/core";
 import { useLangStore } from "../store/lang";
 import { LangToggle } from "./LangToggle";
@@ -35,9 +36,43 @@ const NAV = [
 export function AppShell() {
   const lang = useLangStore((s) => s.lang);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+
+  /*
+   * T14.6 — route-change focus management (WCAG 2.2 SC 2.4.3 Focus Order).
+   * In an SPA the URL changes but focus stays put: after a route swap the
+   * keyboard/screen-reader user is still anchored to the sidebar link they
+   * just activated and gets NO announcement of the new page. Moving focus to
+   * the <main> landmark (tabIndex=-1) on every pathname change restores a
+   * sensible reading order. The initial mount is skipped so a fresh page
+   * load keeps the browser default; query-string-only changes (e.g. opening
+   * the add form on /expenses) do NOT re-trigger — only real route swaps.
+   */
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    mainRef.current?.focus({ preventScroll: true });
+  }, [pathname]);
 
   return (
     <div className={`min-h-dvh bg-ivory text-ink ${lang === "bn" ? "font-bn" : "font-en"}`}>
+      {/* T14.4 — skip link (WCAG 2.2 SC 2.4.1 Bypass Blocks): the header,
+          sidebar and tab bar repeat on every route; keyboard users can jump
+          straight to the content landmark. Visually hidden until focused. */}
+      <a
+        href="#main"
+        onClick={(e) => {
+          e.preventDefault(); // keep the SPA URL clean — focus instead of hash-nav
+          mainRef.current?.focus();
+        }}
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-emerald focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-accent-ink focus:shadow-card"
+      >
+        {t(lang, "skipToContent")}
+      </a>
       <ToastHost />
       <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-line bg-ivory px-4 sm:px-6">
         <Logo withVersion />
@@ -78,7 +113,12 @@ export function AppShell() {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 px-[clamp(16px,3.5vw,40px)] pb-[130px] pt-2">
+        <main
+          ref={mainRef}
+          id="main"
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-[clamp(16px,3.5vw,40px)] pb-[130px] pt-2 focus:outline-none"
+        >
           <Outlet />
         </main>
       </div>

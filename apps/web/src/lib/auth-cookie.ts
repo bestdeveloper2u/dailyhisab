@@ -85,10 +85,13 @@ export function refreshCookieSession(): Promise<AuthSession | null> {
       // back with `data: undefined` and are swallowed the same way. The body
       // is ALSO validated at runtime — types don't protect callers from a
       // misbehaving server, and a half-formed session must never enter the
-      // store.
+      // store. T14.1: the endpoint may also answer 200 {"session": false}
+      // (SessionProbeOut — boot probe with NO cookie at all); the `in`-guard
+      // narrows the union and treats that exactly like "no session".
       if (
         !response.ok ||
         !data ||
+        !("accessToken" in data) ||
         typeof data.accessToken !== "string" ||
         typeof data.refreshToken !== "string" ||
         !data.user

@@ -137,6 +137,43 @@ describe("AppShell", () => {
     expect(budgetTab.getAttribute("href")).toBe("/budget");
   });
 
+  it("offers a skip link as the first landmark that focuses #main (SC 2.4.1)", async () => {
+    const user = userEvent.setup();
+    renderShell();
+    const skip = screen.getByRole("link", { name: "সরাসরি মূল কন্টেন্টে যান" });
+    expect(skip).toHaveAttribute("href", "#main");
+    // Clicking it must focus the main landmark (no hash navigation).
+    await user.click(skip);
+    expect(document.activeElement?.id).toBe("main");
+    expect(window.location.hash).toBe("");
+  });
+
+  it("moves focus to <main> on route change so SR users get page context (SC 2.4.3)", async () => {
+    const user = userEvent.setup();
+    const queryClient = makeQueryClient();
+    stubFetch(dashboardHandler());
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/debts" element={<p>ধার-দেনা</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    // Initial mount: focus stays on <body> (browser default preserved).
+    expect(document.activeElement?.id).not.toBe("main");
+    // "ধার" exists in BOTH the sidebar and the bottom tab bar — click the
+    // sidebar one (first in DOM order).
+    const [debtsLink] = screen.getAllByRole("link", { name: "ধার" });
+    await user.click(debtsLink);
+    expect(await screen.findByText("ধার-দেনা")).toBeInTheDocument();
+    expect(document.activeElement?.id).toBe("main");
+  });
+
   it("renders the prototype-faithful analytics: 4 stats, budget bar, comparison, trend", async () => {
     renderShell();
     // Stats: today / this month (+delta) / last month / year.
