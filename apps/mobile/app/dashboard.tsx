@@ -97,8 +97,21 @@ export default function Dashboard() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.brand}>{BRAND_NAME}</Text>
-        <Text style={styles.title}>{STRINGS.bn.dashboardTitle}</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.brand}>{BRAND_NAME}</Text>
+          <Text style={styles.title}>{STRINGS.bn.dashboardTitle}</Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && styles.settingsButtonPressed,
+          ]}
+          onPress={() => router.push("/settings")}
+          accessibilityRole="button"
+          accessibilityLabel={STRINGS.bn.settings}
+        >
+          <Text style={styles.settingsIcon}>⚙️</Text>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -251,11 +264,29 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: theme.colors.emerald,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: theme.spacing.xl * 2,
     paddingBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
+  },
+  headerText: {
+    alignItems: "center",
     gap: theme.spacing.xs,
+    flex: 1,
+  },
+  settingsButton: {
+    backgroundColor: theme.colors.emeraldSoft,
+    borderRadius: theme.radius.control,
+    padding: theme.spacing.sm,
+  },
+  settingsButtonPressed: {
+    opacity: 0.7,
+  },
+  settingsIcon: {
+    fontSize: 16,
+    color: theme.colors.onAccent,
   },
   brand: {
     color: theme.colors.onAccent,

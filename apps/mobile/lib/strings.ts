@@ -111,6 +111,22 @@ export const STRINGS = {
     budgetSaved: "সংরক্ষিত ✓",
     budgetEditCatLimit: "সীমা বদলান",
     errBudgetLimit: "সঠিক সীমা লিখুন (০ এর বেশি)।",
+
+    // Settings (T11.3)
+    settings: "সেটিংস",
+    profile: "প্রোফাইল",
+    name: "নাম",
+    email: "ইমেইল",
+    language: "ভাষা",
+    theme: "থিম",
+    light: "লাইট",
+    dark: "ডার্ক",
+    langBn: "বাংলা",
+    langEn: "English",
+    voiceLang: "ভয়েস ভাষা",
+    voiceLangValue: "বাংলা (bn-BD)",
+    version: "ভার্সন",
+    logout: "লগ আউট",
   },
   en: {
     account: "Account",
@@ -217,6 +233,23 @@ export const STRINGS = {
     budgetSaved: "Saved ✓",
     budgetEditCatLimit: "Edit limit",
     errBudgetLimit: "Enter a valid limit (greater than 0).",
+
+    // Settings (T11.3) — segment labels stay বাংলা/English in both locales,
+    // and the voice chip stays bn-BD (matches the prototype).
+    settings: "Settings",
+    profile: "Profile",
+    name: "Name",
+    email: "Email",
+    language: "Language",
+    theme: "Theme",
+    light: "Light",
+    dark: "Dark",
+    langBn: "বাংলা",
+    langEn: "English",
+    voiceLang: "Voice language",
+    voiceLangValue: "বাংলা (bn-BD)",
+    version: "Version",
+    logout: "Log out",
   },
 } as const;
 
@@ -253,6 +286,9 @@ export const MONTH_LABELS: Record<"bn" | "en", readonly string[]> = {
 };
 
 export type MobileStringKey = keyof typeof STRINGS.bn;
+
+/** UI language — "bn" is the Bengali-first default. */
+export type Lang = keyof typeof STRINGS;
 
 /** Bengali labels for the API's 8 expense groups (grp column). */
 export const GROUP_LABELS: Record<api.ExpenseGroup, string> = {
