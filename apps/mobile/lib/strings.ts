@@ -113,6 +113,17 @@ export const STRINGS = {
     prevYear: "আগের বছর",
     nextYear: "পরের বছর",
 
+    // Report month KPIs + prev-month compare (T13.1 — prototype screen-month parity)
+    kpiEntries: "এন্ট্রি সংখ্যা",
+    kpiAvg: "দৈনিক গড়",
+    kpiMaxDay: "সর্বোচ্চ দিন",
+    kpiMaxGroup: "সর্বোচ্চ খাত",
+    cmpPrevTitle: "মাসের তুলনা",
+    vsPrev: "গত মাসের চেয়ে",
+    cmpMore: "বেশি",
+    cmpLess: "কম",
+    cmpNoPrev: "গত মাসের কোনো ডেটা নেই",
+
     // Budget (T10.1)
     budgetTitle: "বাজেট",
     budgetMonth: "মাস",
@@ -257,6 +268,17 @@ export const STRINGS = {
     prevYear: "Previous year",
     nextYear: "Next year",
 
+    // Report month KPIs + prev-month compare (T13.1 — prototype screen-month parity)
+    kpiEntries: "Entries",
+    kpiAvg: "Daily avg",
+    kpiMaxDay: "Top day",
+    kpiMaxGroup: "Top category",
+    cmpPrevTitle: "Month comparison",
+    vsPrev: "vs last month",
+    cmpMore: "more",
+    cmpLess: "less",
+    cmpNoPrev: "No data for last month",
+
     // Budget (T10.1)
     budgetTitle: "Budget",
     budgetMonth: "Month",
@@ -326,6 +348,41 @@ export const MONTH_LABELS: Record<"bn" | "en", readonly string[]> = {
     "Oct",
     "Nov",
     "Dec",
+  ],
+};
+
+/**
+ * Full month names for day labels — "৫ সেপ্টেম্বর" style (T13.1 max-spend-day
+ * KPI). Mirrors the web catalog's BN_MONTHS/EN_MONTHS.
+ */
+export const MONTH_NAMES: Record<"bn" | "en", readonly string[]> = {
+  bn: [
+    "জানুয়ারি",
+    "ফেব্রুয়ারি",
+    "মার্চ",
+    "এপ্রিল",
+    "মে",
+    "জুন",
+    "জুলাই",
+    "আগস্ট",
+    "সেপ্টেম্বর",
+    "অক্টোবর",
+    "নভেম্বর",
+    "ডিসেম্বর",
+  ],
+  en: [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ],
 };
 

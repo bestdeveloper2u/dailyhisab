@@ -1,4 +1,9 @@
-import { BRAND_NAME, formatTaka, t } from "@khoroch/core";
+import {
+  BRAND_NAME,
+  formatTaka,
+  t,
+  toBnDigits,
+} from "@khoroch/core";
 import { Redirect, router, useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -18,7 +23,12 @@ import {
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
 import { useAuth } from "../lib/auth";
-import { GROUP_LABELS, MONTH_LABELS, STRINGS } from "../lib/strings";
+import {
+  GROUP_LABELS,
+  MONTH_LABELS,
+  MONTH_NAMES,
+  STRINGS,
+} from "../lib/strings";
 import { theme } from "../lib/theme";
 
 type Mode = "monthly" | "yearly";
@@ -53,12 +63,40 @@ function monthLabel(ym: string): string {
   return MONTH_LABELS.bn[idx] ?? ym;
 }
 
+/** Shift a "YYYY-MM" key by n months (same math as the web's shiftYm). */
+function shiftYm(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+/** "2026-09-05" → "৫ সেপ্টেম্বর" — bn day label for the max-spend-day KPI. */
+function dayLabelFromIso(iso: string): string {
+  const [, m, d] = iso.split("-").map(Number);
+  const name = MONTH_NAMES.bn[(m || 1) - 1] ?? "";
+  return `${toBnDigits(String(d ?? ""))} ${name}`;
+}
+
+/** Percent with 1 decimal in Bengali digits — "৫.২%" (mirrors web fmtPct). */
+function fmtPct(p: number): string {
+  return `${toBnDigits(p.toFixed(1))}%`;
+}
+
+/** API group key → bn label, falling back to the raw name when unknown. */
+function groupDisplayLabel(grp: string): string {
+  return grp in GROUP_LABELS ? GROUP_LABELS[grp as keyof typeof GROUP_LABELS] : grp;
+}
+
 /**
  * Report (T5.1): monthly + yearly summaries against
  * /api/v1/reports/monthly and /api/v1/reports/yearly.
  * Monthly shows the current month (same domain as the dashboard); yearly has
  * a prev/next year picker and a 12-month mini bar chart (by_month is always
  * 12 ascending zero-filled entries with decimal-string totals).
+ * T13.1 adds the prototype screen-month parity block on the monthly tab:
+ * a 2×2 KPI grid (entries / daily avg / max-spend day / top group) computed
+ * client-side from MonthlyReportOut, plus a prev-month comparison card from
+ * a second monthlyReport fetch (ym − 1).
  */
 export default function Report() {
   const auth = useAuth();
@@ -66,6 +104,7 @@ export default function Report() {
   const [mode, setMode] = useState<Mode>("monthly");
   const [year, setYear] = useState<number>(currentYear());
   const [monthly, setMonthly] = useState<MonthlyReport | null>(null);
+  const [prevMonthly, setPrevMonthly] = useState<MonthlyReport | null>(null);
   const [yearly, setYearly] = useState<YearlyReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,8 +123,18 @@ export default function Report() {
       setError(null);
       try {
         if (which === "monthly") {
-          const report = await monthlyReport(token, currentYm());
-          if (seq.current === mine) setMonthly(report);
+          // T13.1: current month + previous month in parallel. A prev-month
+          // failure must not break the main report — it degrades to "no prev
+          // data" (the comparison card shows cmpNoPrev).
+          const ym = currentYm();
+          const [report, prev] = await Promise.all([
+            monthlyReport(token, ym),
+            monthlyReport(token, shiftYm(ym, -1)).catch(() => null),
+          ]);
+          if (seq.current === mine) {
+            setMonthly(report);
+            setPrevMonthly(prev);
+          }
         } else {
           const report = await yearlyReport(token, forYear);
           if (seq.current === mine) setYearly(report);
@@ -140,6 +189,37 @@ export default function Report() {
   }, 0);
 
   const thisYear = currentYear();
+
+  // --- T13.1: month KPIs + prev-month comparison (monthly tab only) ---
+  // Daily-avg denominator = number of distinct spend days (by_day buckets),
+  // matching the web Report MonthlyView's dailyAvg.
+  const byDayRows = mode === "monthly" && monthly !== null ? monthly.by_day : [];
+  const daysWithSpend = new Set(byDayRows.map((d) => d.iso)).size;
+  const dailyAvgNum =
+    monthly !== null && daysWithSpend > 0 ? Number(monthly.total) / daysWithSpend : 0;
+  const topDay =
+    byDayRows.length > 0
+      ? byDayRows.reduce((a, b) => (Number(b.total) > Number(a.total) ? b : a))
+      : null;
+  const topGroupEntry =
+    mode === "monthly" && groupRows.length > 0 && Number(groupRows[0][1]) > 0
+      ? groupRows[0]
+      : null;
+
+  // Month-over-month delta (same math as the web Dashboard's comparison card):
+  // ▼ green = spent less than last month, ▲ red = spent more.
+  const prevTotalNum = prevMonthly !== null ? Number(prevMonthly.total) : 0;
+  const hasPrevData =
+    mode === "monthly" &&
+    prevMonthly !== null &&
+    (prevTotalNum > 0 || prevMonthly.count > 0);
+  const cmpDiffNum =
+    prevMonthly !== null && hasPrevData ? Number(total) - prevTotalNum : 0;
+  const cmpDown = cmpDiffNum < 0;
+  const cmpPct =
+    prevMonthly !== null && hasPrevData && prevTotalNum > 0
+      ? Math.abs((cmpDiffNum / prevTotalNum) * 100)
+      : 0;
 
   return (
     <View style={styles.screen}>
@@ -230,6 +310,101 @@ export default function Report() {
               </Text>
             </View>
 
+            {mode === "monthly" && (
+              <>
+                {/* KPI 2×2 (prototype screen-month .kpis) — every value is
+                    clamped so long labels never wrap the card. */}
+                <View style={styles.kpiGrid}>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel} numberOfLines={1}>
+                      {STRINGS.bn.kpiEntries}
+                    </Text>
+                    <Text
+                      style={styles.kpiValue}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {toBnDigits(String(count))}
+                    </Text>
+                  </View>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel} numberOfLines={1}>
+                      {STRINGS.bn.kpiAvg}
+                    </Text>
+                    <Text
+                      style={styles.kpiValue}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {formatTaka(dailyAvgNum, "bn")}
+                    </Text>
+                  </View>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel} numberOfLines={1}>
+                      {STRINGS.bn.kpiMaxDay}
+                    </Text>
+                    <Text
+                      style={styles.kpiValue}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {topDay === null
+                        ? "—"
+                        : `${dayLabelFromIso(topDay.iso)} · ${formatTaka(
+                            topDay.total,
+                            "bn",
+                          )}`}
+                    </Text>
+                  </View>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel} numberOfLines={1}>
+                      {STRINGS.bn.kpiMaxGroup}
+                    </Text>
+                    <Text
+                      style={styles.kpiValue}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {topGroupEntry === null
+                        ? "—"
+                        : `${groupDisplayLabel(topGroupEntry[0])} · ${formatTaka(
+                            topGroupEntry[1],
+                            "bn",
+                          )}`}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Prev-month comparison (prototype prevCmp / web dashCmp). */}
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>
+                    {STRINGS.bn.cmpPrevTitle}
+                  </Text>
+                  {!hasPrevData ? (
+                    <Text style={styles.emptyNote}>{STRINGS.bn.cmpNoPrev}</Text>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.cmpValue,
+                        {
+                          color: cmpDown
+                            ? theme.colors.emerald
+                            : theme.colors.danger,
+                        },
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {cmpDown ? "▼" : "▲"} {STRINGS.bn.vsPrev}{" "}
+                      {formatTaka(Math.abs(cmpDiffNum), "bn")}{" "}
+                      {cmpDown ? STRINGS.bn.cmpLess : STRINGS.bn.cmpMore} (
+                      {fmtPct(cmpPct)})
+                    </Text>
+                  )}
+                </View>
+              </>
+            )}
+
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>{STRINGS.bn.byGroup}</Text>
               {groupRows.length === 0 ? (
@@ -243,9 +418,7 @@ export default function Report() {
                   <View style={styles.groupRow} key={grp}>
                     <View style={styles.groupLabelRow}>
                       <Text style={styles.groupLabel} numberOfLines={1}>
-                        {grp in GROUP_LABELS
-                          ? GROUP_LABELS[grp as keyof typeof GROUP_LABELS]
-                          : grp}
+                        {groupDisplayLabel(grp)}
                       </Text>
                       <Text style={styles.groupAmt}>
                         {formatTaka(amt, "bn")}
@@ -448,6 +621,35 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.card,
     padding: theme.spacing.lg,
     gap: theme.spacing.md,
+  },
+  // T13.1: 2×2 KPI grid (prototype .kpis) — two cards per row via wrap.
+  kpiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.sm,
+  },
+  kpiCard: {
+    flexGrow: 1,
+    flexBasis: "46%",
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.card,
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  kpiLabel: {
+    color: theme.colors.muted,
+    fontSize: 12,
+  },
+  kpiValue: {
+    color: theme.colors.ink,
+    fontSize: 15,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  cmpValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   sectionTitle: {
     color: theme.colors.ink,
