@@ -42,6 +42,55 @@ export const PAY_LABELS: Record<PayMethod, { bn: string; en: string }> = {
 export const payName = (p: string, lang: Lang): string =>
   PAY_LABELS[p as PayMethod]?.[lang] ?? p;
 
+/** Prototype group dot colors (www/index.html GROUPS map — frozen design). */
+export const GROUP_DOTS: Record<string, string> = {
+  food: "#D97706",
+  housing: "#0F766E",
+  utility: "#2563EB",
+  transport: "#7C3AED",
+  health: "#DC2626",
+  education: "#DB2777",
+  personal: "#65A30D",
+  other: "#64748B",
+};
+
+export const groupDot = (g: string): string => GROUP_DOTS[g] ?? GROUP_DOTS.other;
+
+const BN_WEEKDAYS = [
+  "রবিবার",
+  "সোমবার",
+  "মঙ্গলবার",
+  "বুধবার",
+  "বৃহস্পতিবার",
+  "শুক্রবার",
+  "শনিবার",
+];
+const EN_WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+/** bn → "বুধবার, ২ সেপ্টেম্বর ২০২৬" · en → "Wednesday, 2 September 2026". */
+export function fullDateLabel(d: Date, lang: Lang): string {
+  const wd = (lang === "bn" ? BN_WEEKDAYS : EN_WEEKDAYS)[d.getDay()] ?? "";
+  const day = lang === "bn" ? toBnDigits(String(d.getDate())) : String(d.getDate());
+  const mon = (lang === "bn" ? BN_MONTHS : EN_MONTHS)[d.getMonth()] ?? "";
+  const y = lang === "bn" ? toBnDigits(String(d.getFullYear())) : String(d.getFullYear());
+  return `${wd}, ${day} ${mon} ${y}`;
+}
+
+/** Short month label for the trend chart: bn "সেপ্টেম্ব" · en "Sep". */
+export function shortMonthLabel(ym: string, lang: Lang): string {
+  const m = Number(ym.slice(5, 7));
+  if (lang === "bn") return (BN_MONTHS[(m || 1) - 1] ?? "").slice(0, 5);
+  return (EN_MONTHS[(m || 1) - 1] ?? "").slice(0, 3);
+}
+
 const BN_MONTHS = [
   "জানুয়ারি",
   "ফেব্রুয়ারি",
