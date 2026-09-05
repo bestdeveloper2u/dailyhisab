@@ -16,6 +16,12 @@ Column order mirrors the wire keys: iso, desc, grp, cat, amt, pay. Rows are
 ordered ``iso ASC, id ASC`` and fetched in keyset batches (500 rows per
 query) so memory stays bounded regardless of history size. Current user's
 rows only.
+
+User-typed free-text cells (desc, cat) are passed through ``_csv_safe``:
+if their first character is ``= + - @ \\t \\r`` a leading apostrophe is
+added (OWASP CSV Injection defense) so spreadsheet apps don't evaluate
+them as formulas. Server-generated cells (ISO date, money string,
+enum-validated grp/pay) are emitted as-is.
 """
 
 import csv
@@ -57,6 +63,27 @@ def _money(value: Decimal | float | str) -> str:
     return str(Decimal(str(value)).quantize(_TWO_PLACES))
 
 
+#: First characters that spreadsheet apps (Excel/LibreOffice/Sheets) may
+#: evaluate as a formula — OWASP CSV Injection
+#: (https://owasp.org/www-community/attacks/CSV_Injection).
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(cell: str) -> str:
+    """Defuse CSV formula injection in a user-controlled cell.
+
+    If the cell's FIRST character is one of ``= + - @ \\t \\r`` it gets a
+    leading apostrophe so the spreadsheet treats it as text instead of
+    executing it (e.g. ``=HYPERLINK(...)``, ``=cmd|' /C calc'!A0``). Anything
+    else passes through unchanged — in particular plain Bengali text. RFC 4180
+    quoting is untouched: the ``csv`` writer still quotes fields that contain
+    delimiters/quotes/CR-LF, and the apostrophe is an ordinary character.
+    """
+    if cell.startswith(_FORMULA_PREFIXES):
+        return f"'{cell}"
+    return cell
+
+
 async def _csv_bytes(
     db: AsyncSession, user_id: uuid.UUID | str, date_from: date | None, date_to: date | None
 ) -> AsyncIterator[bytes]:
@@ -85,7 +112,18 @@ async def _csv_bytes(
         buf = io.StringIO()
         writer = csv.writer(buf, lineterminator="\r\n")
         for iso, desc, grp, cat, amt, pay, row_id in rows:
-            writer.writerow([iso.isoformat(), desc or "", grp, cat, _money(amt), pay])
+            # desc/cat are user-typed free text → formula-injection guard;
+            # grp/pay are server-validated enums, iso/amt server-generated.
+            writer.writerow(
+                [
+                    iso.isoformat(),
+                    _csv_safe(desc or ""),
+                    grp,
+                    _csv_safe(cat),
+                    _money(amt),
+                    pay,
+                ]
+            )
             last = (iso, row_id)
         yield buf.getvalue().encode("utf-8")
 
