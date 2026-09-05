@@ -43,7 +43,8 @@ export function AppShell() {
         <LangToggle size="compact" />
       </header>
 
-      <div className="mx-auto flex w-full max-w-[1200px]">
+      {/* Fluid full-width layout like the frozen prototype (no max-w cap). */}
+      <div className="flex w-full">
         <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-[236px] shrink-0 flex-col border-r border-line bg-surface px-2.5 py-3 lg:flex">
           <nav aria-label="Main" className="flex flex-col gap-1">
             {NAV.map(({ to, key, end, Icon }) => (
@@ -64,7 +65,7 @@ export function AppShell() {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:pb-10">
+        <main className="min-w-0 flex-1 px-[clamp(16px,3.5vw,40px)] pb-[130px] pt-2">
           <Outlet />
         </main>
       </div>
