@@ -23,8 +23,10 @@ import {
   ApiError,
   createExpense,
   createExpensesBulk,
+  listExpenses,
   listKhataCategories,
   voiceParse,
+  type Expense,
   type ExpenseCreateInput,
   type ExpenseGroup,
   type Khata,
@@ -102,6 +104,163 @@ function isValidIso(value: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 
+// --- Duplicate-add guard (T24.3 — web T24.1 twin) -----------------------------
+// WCAG 2.2 SC 3.3.4 (Error Prevention — Legal/Financial/Data):
+// https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data
+// Financial submissions must be reversible, checked, or confirmed. Repeating a
+// voice phrase ("চায়ে ৪০ টাকা") used to save twice silently — these helpers
+// let the screen *check* before saving and demand one explicit confirmation
+// when an incoming expense matches something saved moments earlier. Matching
+// is deliberately narrow: same khata (case/whitespace/NFC-insensitive) + same
+// amount (2-dp, digit-script-insensitive) within DUP_WINDOW_MINUTES. The guard
+// never blocks: a match only upgrades a save into an explicit confirmation.
+// (Ports apps/web/src/lib/duplicate.ts; no new packages, per ADR scope.)
+
+/** How recent a saved expense must be to count as "just added". */
+const DUP_WINDOW_MINUTES = 30;
+
+interface DupCandidate {
+  amt: string | number;
+  cat: string;
+  /** Only consulted when a compared row carries no usable created_at. */
+  iso?: string | null;
+}
+
+interface DupRow {
+  amt: string | number;
+  cat: string;
+  iso?: string;
+  created_at?: string | null;
+}
+
+/** BN digits ০-৯ → ASCII, keep the first dot; ৳, commas, whitespace dropped. */
+function canonAmountClean(raw: string): string {
+  let out = "";
+  let sawDot = false;
+  for (const ch of raw) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0x09e6 && code <= 0x09ef) {
+      out += String(code - 0x09e6);
+    } else if (ch >= "0" && ch <= "9") {
+      out += ch;
+    } else if (ch === "." && !sawDot) {
+      out += ch;
+      sawDot = true;
+    }
+  }
+  return out;
+}
+
+/**
+ * Amount as an integer number of poisha: "40" / "40.00" / "৪০" / "৳ 40" →
+ * 4000. Rounded to 2dp so decimal-string drift ("0.1" vs "0.10") never
+ * splits a duplicate pair. null when unparseable.
+ */
+function canonAmt(raw: string | number): number | null {
+  const cleaned = canonAmountClean(String(raw));
+  if (cleaned === "" || cleaned === ".") return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+/**
+ * Khata identity: Unicode NFC (keyboards compose Bengali conjuncts/vowel
+ * signs differently), trimmed, whitespace-collapsed, case-folded — so
+ * "চা", "  চা  " and "Tea" all compare equal.
+ */
+function canonCat(raw: string): string {
+  return raw.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Stable (amount, khata) identity for duplicate detection. */
+function dupKey(item: { amt: string | number; cat: string }): string {
+  return `${canonAmt(item.amt)}|${canonCat(item.cat)}`;
+}
+
+/**
+ * Is `row` recent enough to be the expense the user is about to re-add?
+ * created_at drives the decision; rows without a parseable created_at
+ * fall back to same-day equality with the candidate.
+ */
+function isRecentRow(
+  row: DupRow,
+  candidate: DupCandidate,
+  opts: { now?: Date; windowMinutes?: number },
+): boolean {
+  const now = (opts.now ?? new Date()).getTime();
+  const windowMs = (opts.windowMinutes ?? DUP_WINDOW_MINUTES) * 60_000;
+  const created = Date.parse(String(row.created_at ?? ""));
+  if (!Number.isNaN(created)) return now - created <= windowMs;
+  return row.iso !== undefined && row.iso === candidate.iso;
+}
+
+/**
+ * Every already-saved row that looks like a re-add of `candidate`, most
+ * recent first. Empty array = nothing suspicious.
+ */
+function findDuplicateExpenses<R extends DupRow>(
+  candidate: DupCandidate,
+  rows: readonly R[],
+  opts: { now?: Date; windowMinutes?: number } = {},
+): R[] {
+  const amt = canonAmt(candidate.amt);
+  const cat = canonCat(candidate.cat);
+  if (amt === null || cat === "") return [];
+  return rows
+    .filter(
+      (row) =>
+        canonAmt(row.amt) === amt &&
+        canonCat(row.cat) === cat &&
+        isRecentRow(row, candidate, opts),
+    )
+    .sort(
+      (a, b) =>
+        Date.parse(String(b.created_at ?? "")) -
+        Date.parse(String(a.created_at ?? "")),
+    );
+}
+
+/**
+ * Keys of a batch's internal duplicates: the parser splitting one repeated
+ * sentence ("চায়ে ৪০ টাকা… চায়ে ৪০ টাকা") into two identical candidates is
+ * the same accidental re-add, just inside a single save. Unparseable items
+ * are never flagged.
+ */
+function findBatchDuplicateKeys(
+  items: readonly { amt: string | number; cat: string }[],
+): Set<string> {
+  const seen = new Set<string>();
+  const dups = new Set<string>();
+  for (const item of items) {
+    if (canonAmt(item.amt) === null || canonCat(item.cat) === "") continue;
+    const key = dupKey(item);
+    if (seen.has(key)) dups.add(key);
+    else seen.add(key);
+  }
+  return dups;
+}
+
+/**
+ * Saved rows for the guard's comparisons — one small indexed day-query per
+ * distinct date (usually just today, limit 50/day). Failures degrade to an
+ * empty list: the guard is an extra check (fail-open), never a new way for
+ * a save to break.
+ */
+async function fetchExpensesForDays(
+  accessToken: string,
+  isos: readonly string[],
+): Promise<Expense[]> {
+  const days = [...new Set(isos)].slice(0, 5);
+  const settled = await Promise.allSettled(
+    days.map((iso) => listExpenses(accessToken, { from: iso, to: iso, limit: 50 })),
+  );
+  const rows: Expense[] = [];
+  for (const out of settled) {
+    if (out.status === "fulfilled") rows.push(...out.value.items);
+  }
+  return rows;
+}
+
 /** Add-expense screen wired to POST /api/v1/expenses (Bearer from AuthProvider).
  *  T15.2 adds prototype voice parity: hold the mic, speak bn-BD, POST the
  *  transcript to /voice/parse, confirm the candidates, bulk-create them. */
@@ -135,6 +294,16 @@ export default function AddExpense() {
   const [voiceSaving, setVoiceSaving] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const voiceSession = useRef<VoiceSession | null>(null);
+  // T24.3 — the already-saved expense the duplicate guard matched (null =
+  // nothing matched / not checked yet). Non-null turns the next submit into
+  // an explicit "তবুও যোগ করুন" confirmation (WCAG 2.2 SC 3.3.4).
+  const [dupExisting, setDupExisting] = useState<Expense | null>(null);
+  // Field signature the confirmation was given for — any change re-arms the
+  // guard, so a stale confirmation can never bless different values.
+  const dupSigRef = useRef("");
+  // T24.3 — same-day saved rows for the voice confirm sheet's duplicate
+  // flags (empty = nothing fetched / nothing matched).
+  const [voiceRecentRows, setVoiceRecentRows] = useState<Expense[]>([]);
 
   useEffect(() => {
     void loadSpeechModule().then((mod) => setVoiceSupported(mod !== null));
@@ -225,6 +394,15 @@ export default function AddExpense() {
   // after a successful create has already cleared it.
   useEffect(() => () => cancelDraftSave(), []);
 
+  // T24.3: editing amount/khata/date re-arms the guard — the confirmation
+  // was for those exact values, and changed values must be re-checked.
+  useEffect(() => {
+    if (dupExisting !== null && dupSigRef.current !== `${amount}|${cat}|${iso}`) {
+      dupSigRef.current = "";
+      setDupExisting(null);
+    }
+  }, [amount, cat, iso, dupExisting]);
+
   // --- Khata recents (T20.4-mob — web T20.4 twin) ------------------------------
   // Top 8 khatas fetched once on mount as prefill hints. Silent-fail: on any
   // error (or an empty history) the row simply never renders — the manual
@@ -253,6 +431,7 @@ export default function AddExpense() {
     setVoiceCandidates([]);
     setVoiceAmounts([]);
     setVoicePartial("");
+    setVoiceRecentRows([]);
   }
 
   /** Final transcript → POST /voice/parse → confirm sheet (or inline hint). */
@@ -275,6 +454,13 @@ export default function AddExpense() {
       }
       setVoiceCandidates(parsed.items);
       setVoiceAmounts(parsed.items.map((item) => String(Number(item.amt))));
+      // T24.3 — same days' saved rows for the sheet's duplicate flags;
+      // fetchExpensesForDays is fail-open (allSettled → [] on errors).
+      const recent = await fetchExpensesForDays(
+        token,
+        parsed.items.map((it) => it.iso ?? todayIso()),
+      );
+      setVoiceRecentRows(recent);
       setVoicePhase("confirm");
     } catch (err) {
       setVoiceError(describeApiError(err));
@@ -380,6 +566,13 @@ export default function AddExpense() {
   const validIso = isValidIso(iso.trim());
   const canSubmit = validAmount && validCat && validIso && !pending;
   const voiceCanSave = voiceCandidates.length > 0 && !voiceSaving;
+  // T24.3 — voice-sheet duplicate flags: batch-internal twins ("চায়ে ৪০
+  // টাকা… চায়ে ৪০ টাকা") plus candidates matching rows saved moments ago.
+  const voiceBatchDupKeys = findBatchDuplicateKeys(voiceCandidates);
+  const isDupVoiceItem = (item: ParsedExpense) =>
+    voiceBatchDupKeys.has(dupKey(item)) ||
+    findDuplicateExpenses(item, voiceRecentRows).length > 0;
+  const voiceAnyDup = voiceCandidates.some(isDupVoiceItem);
   // T20.3 quick-chip targets (local device dates, YYYY-MM-DD).
   const todayStr = localIso(0);
   const yesterdayStr = localIso(-1);
@@ -410,6 +603,27 @@ export default function AddExpense() {
     setPending(true);
     setError(null);
     try {
+      // T24.3 — duplicate-add guard (WCAG 2.2 SC 3.3.4 "checked",
+      // https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data):
+      // before a create, compare against that day's saved expenses; on a
+      // match the first tap only warns and relabels the button "তবুও যোগ
+      // করুন" — the re-add goes through only on an explicit second tap. A
+      // failed guard fetch degrades to no-check (fail-open); the guard never
+      // blocks a save.
+      if (dupExisting === null) {
+        const submitIso = iso.trim();
+        const recent = await fetchExpensesForDays(token, [submitIso]);
+        const [hit] = findDuplicateExpenses(
+          { amt: normalizedAmount, cat: cat.trim(), iso: submitIso },
+          recent,
+        );
+        if (hit) {
+          dupSigRef.current = `${amount}|${cat}|${iso}`;
+          setDupExisting(hit);
+          return; // finally unlocks the form; warning + confirm button show
+        }
+      }
+      setDupExisting(null);
       const trimmedDesc = desc.trim();
       await createExpense(token, {
         cat: cat.trim(),
@@ -607,6 +821,24 @@ export default function AddExpense() {
             editable={!pending}
           />
 
+          {/* T24.3 duplicate guard (WCAG 2.2 SC 3.3.4): a checked submission —
+              the save waits for the explicit "তবুও যোগ করুন" tap below. */}
+          {dupExisting !== null && (
+            <View
+              style={styles.dupBox}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+            >
+              <Text style={styles.dupBoxTitle}>{t("dupTitle")}</Text>
+              <Text style={styles.dupBoxBody}>
+                {t("dupFormWarn")}{" "}
+                <Text style={styles.dupBoxMatch}>
+                  {dupExisting.cat} · ৳{dupExisting.amt}
+                </Text>
+              </Text>
+            </View>
+          )}
+
           <Pressable
             style={({ pressed }) => [
               styles.submitButton,
@@ -616,10 +848,16 @@ export default function AddExpense() {
             onPress={() => void handleSubmit()}
             disabled={!canSubmit}
             accessibilityRole="button"
-            accessibilityLabel={STRINGS.bn.save}
+            accessibilityLabel={
+              dupExisting !== null ? t("dupAddAnyway") : STRINGS.bn.save
+            }
           >
             <Text style={styles.submitLabel}>
-              {pending ? STRINGS.bn.saving : STRINGS.bn.save}
+              {pending
+                ? STRINGS.bn.saving
+                : dupExisting !== null
+                  ? t("dupAddAnyway")
+                  : STRINGS.bn.save}
             </Text>
           </Pressable>
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
@@ -692,6 +930,19 @@ export default function AddExpense() {
             <Text style={styles.sheetTranscript} numberOfLines={2}>
               “{voiceTranscript}”
             </Text>
+            {/* T24.3 duplicate guard: the sheet itself is the explicit
+                confirmation — the warning + relabeled button make the check
+                visible before the bulk create (WCAG 2.2 SC 3.3.4). */}
+            {voiceAnyDup && (
+              <View
+                style={styles.dupBox}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <Text style={styles.dupBoxTitle}>{t("dupTitle")}</Text>
+                <Text style={styles.dupBoxBody}>{t("dupVoiceWarn")}</Text>
+              </View>
+            )}
             <Text style={styles.sheetLabel}>{STRINGS.bn.amount}</Text>
             <View style={styles.sheetRows}>
               {voiceCandidates.map((item, idx) => (
@@ -699,6 +950,9 @@ export default function AddExpense() {
                   <Text style={styles.sheetCat} numberOfLines={1}>
                     {item.cat} · {GROUP_LABELS[item.grp] ?? item.grp}
                   </Text>
+                  {isDupVoiceItem(item) && (
+                    <Text style={styles.sheetDupTag}>{t("dupTag")}</Text>
+                  )}
                   <TextInput
                     style={styles.sheetInput}
                     value={voiceAmounts[idx] ?? ""}
@@ -737,10 +991,16 @@ export default function AddExpense() {
                 onPress={() => void confirmVoice()}
                 disabled={!voiceCanSave}
                 accessibilityRole="button"
-                accessibilityLabel={t("voiceSaveAll")}
+                accessibilityLabel={
+                  voiceAnyDup ? t("dupSaveAnyway") : t("voiceSaveAll")
+                }
               >
                 <Text style={styles.sheetSaveLabel}>
-                  {voiceSaving ? STRINGS.bn.saving : t("voiceSaveAll")}
+                  {voiceSaving
+                    ? STRINGS.bn.saving
+                    : voiceAnyDup
+                      ? t("dupSaveAnyway")
+                      : t("voiceSaveAll")}
                 </Text>
               </Pressable>
             </View>
@@ -897,6 +1157,30 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     fontSize: 12,
   },
+  // --- Duplicate-add guard (T24.3 — WCAG 2.2 SC 3.3.4 "checked") ------------
+  /** Warning box: same tokens as the web guard's role=alert (warning border,
+      soft warning fill); role=alert announces it to screen readers. */
+  dupBox: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.warning,
+    backgroundColor: theme.colors.warningSoft,
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    gap: 2,
+  },
+  dupBoxTitle: {
+    color: theme.colors.warning,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  dupBoxBody: {
+    color: theme.colors.ink,
+    fontSize: 13,
+  },
+  dupBoxMatch: {
+    fontWeight: "600",
+  },
   submitButton: {
     backgroundColor: theme.colors.emerald,
     borderRadius: theme.radius.control,
@@ -1033,6 +1317,12 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     fontSize: 14,
     fontWeight: "600",
+  },
+  /** T24.3 — "আগেই আছে" badge on voice candidates that look like re-adds. */
+  sheetDupTag: {
+    color: theme.colors.warning,
+    fontSize: 11,
+    fontWeight: "700",
   },
   sheetInput: {
     borderWidth: StyleSheet.hairlineWidth,

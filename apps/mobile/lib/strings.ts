@@ -270,6 +270,15 @@ export const STRINGS = {
     bump50A11y: "+৫০ টাকা যোগ করুন",
     bump100A11y: "+১০০ টাকা যোগ করুন",
     bump500A11y: "+৫০০ টাকা যোগ করুন",
+
+    // Duplicate-add guard (T24.3 — web T24.1 twin; WCAG 2.2 SC 3.3.4
+    // "checked" submissions: https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data)
+    dupTitle: "সম্ভাব্য ডুপ্লিকেট খরচ",
+    dupFormWarn: "একই খরচ আগেই যোগ হয়েছে বলে মনে হচ্ছে — আসলেই দ্বিতীয়টি হলে তবুও যোগ করুন, নাহলে পরিমাণ বা খাত বদলান।",
+    dupVoiceWarn: "নিচের খরচগুলো সবেমাত্র যোগ হয়েছে বলে মনে হচ্ছে — দুবার যোগ হওয়া আটকাতে আগে মিলিয়ে নিন।",
+    dupTag: "আগেই আছে",
+    dupSaveAnyway: "তবুও সংরক্ষণ করুন",
+    dupAddAnyway: "তবুও যোগ করুন",
   },
   en: {
     account: "Account",
@@ -536,6 +545,15 @@ export const STRINGS = {
     bump50A11y: "add 50 taka",
     bump100A11y: "add 100 taka",
     bump500A11y: "add 500 taka",
+
+    // Duplicate-add guard (T24.3 — web T24.1 twin; WCAG 2.2 SC 3.3.4
+    // "checked" submissions: https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data)
+    dupTitle: "Possible duplicate expense",
+    dupFormWarn: "You seem to have added this expense already — tap Add anyway only if it really is a second one.",
+    dupVoiceWarn: "The items below look like expenses you just added — review them first so nothing is saved twice.",
+    dupTag: "already added",
+    dupSaveAnyway: "Save anyway",
+    dupAddAnyway: "Add anyway",
   },
 } as const;
 
