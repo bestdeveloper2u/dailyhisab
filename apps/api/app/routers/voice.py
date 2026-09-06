@@ -93,6 +93,7 @@ _THOUSAND_WORD = "হাজার"
 _KEYWORDS: list[tuple[str, ExpenseGroup]] = [
     # transport — "ভাড়া টাকা" (fare money) before housing's ভাড়া
     ("ভাড়া টাকা", "transport"),
+    ("বাস ভাড়া", "transport"),
     ("রিকশা", "transport"),
     ("rickshaw", "transport"),
     # housing — বাসা before বাস (বাস is a substring of বাসা)
@@ -105,6 +106,14 @@ _KEYWORDS: list[tuple[str, ExpenseGroup]] = [
     ("uber", "transport"),
     # food
     ("চা", "food"),
+    ("চাল", "food"),
+    ("ডাল", "food"),
+    ("তেল", "food"),
+    ("সবজি", "food"),
+    ("ডিম", "food"),
+    ("মুদি", "food"),
+    ("বাজার", "food"),
+    ("হোটেল", "food"),
     ("কফি", "food"),
     ("coffee", "food"),
     ("খাবার", "food"),
@@ -212,18 +221,28 @@ def _strip_amount_text(seg: str) -> str:
 
 
 def _match_category(seg: str) -> tuple[str, ExpenseGroup]:
-    """First keyword hit → ``(cat, grp)``; otherwise ``("other", "other")``."""
+    """Longest keyword hit wins → ``(cat, grp)``; otherwise ``("other", "other")``.
+
+    Longest-first matters more than list order now: "চাল" (rice) must beat
+    "চা" (tea) even though "চা" is a substring of "চাল" and sits earlier in
+    the list. Ties on length keep the earlier list entry.
+    """
+    best: tuple[str, ExpenseGroup] | None = None
     for keyword, grp in _KEYWORDS:
-        if keyword in seg:
-            return keyword, grp
+        if keyword in seg and (best is None or len(keyword) > len(best[0])):
+            best = (keyword, grp)
+    if best is not None:
+        return best
     return "other", "other"
 
 
 def _match_pay(seg: str) -> PayMethod | None:
+    """Longest keyword hit wins (same substring-safety as categories)."""
+    best: PayMethod | None = None
     for keyword, pay in _PAY_KEYWORDS:
-        if keyword in seg:
-            return pay
-    return None
+        if keyword in seg and (best is None or len(keyword) > len(best)):
+            best = pay
+    return best
 
 
 def _parse_segment(seg: str, today: date) -> tuple[ParsedItem, float] | None:

@@ -42,6 +42,33 @@ async def test_parse_english_keyword_decimal(client: AsyncClient) -> None:
     assert body["confidence"] == 0.95
 
 
+async def test_parse_longest_keyword_beats_substring(client: AsyncClient) -> None:
+    """Owner report: 'চাল ৫০ টাকা' parsed as খাত 'চা' — longest match must win."""
+    headers, _ = await register_user(client, email="voice3@test.dev")
+    r = await client.post(
+        VOICE, json={"text": "চাল ৫০ টাকা"}, headers=headers
+    )
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert len(items) == 1
+    assert items[0]["cat"] == "চাল"  # not the substring "চা"
+    assert items[0]["grp"] == "food"
+    assert items[0]["amt"] == "50.00"
+
+
+async def test_parse_tea_still_tea_and_groceries(client: AsyncClient) -> None:
+    headers, _ = await register_user(client, email="voice4@test.dev")
+    r = await client.post(
+        VOICE,
+        json={"text": "চা ২০, ডাল ১১০ এবং বাজার ৩০০"},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert [i["cat"] for i in items] == ["চা", "ডাল", "বাজার"]
+    assert all(i["grp"] == "food" for i in items)
+
+
 async def test_parse_digits_only_is_other(client: AsyncClient) -> None:
     headers, _ = await register_user(client, email="voice3@test.dev")
     r = await client.post(VOICE, json={"text": "৫০"}, headers=headers)
