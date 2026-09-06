@@ -90,6 +90,10 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   const [note, setNote] = useState<string | null>(null);
   const recRef = useRef<RecognitionLike | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Submission guard — set synchronously so Enter key-repeat, double-taps,
+  // or Enter+button races can never fire the parse→bulk pipeline twice
+  // (owner report: typed expense got added two times).
+  const busyRef = useRef(false);
   // Dictation session refs — survive recognition restarts (onend→start).
   const baseTextRef = useRef("");
   const finalRef = useRef("");
@@ -212,29 +216,35 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
    * review list first; nothing recognized → keep the transcript editable.
    */
   async function runFlow() {
+    if (busyRef.current) return;
     setError(null);
     setSavedCount(null);
     const transcript = text.trim();
     if (!transcript || pending) return;
-    const res = await parse.mutateAsync(transcript);
-    if (!res.ok) {
-      setError(res.detail || w(lang, "errFallback"));
-      return;
-    }
-    setConfidence(res.data.confidence);
-    if (res.data.items.length === 0) {
-      setItems([]); // "কিছু বোঝা যায়নি" — transcript stays for editing
-      return;
-    }
-    if (res.data.confidence >= AUTO_SAVE_CONFIDENCE) {
-      const saved = await saveItems(res.data.items);
-      if (saved) {
-        // Prototype vpDone: brief ✓ then the overlay closes itself.
-        window.setTimeout(() => handleClose(), 1600);
+    busyRef.current = true;
+    try {
+      const res = await parse.mutateAsync(transcript);
+      if (!res.ok) {
+        setError(res.detail || w(lang, "errFallback"));
+        return;
       }
-      return;
+      setConfidence(res.data.confidence);
+      if (res.data.items.length === 0) {
+        setItems([]); // "কিছু বোঝা যায়নি" — transcript stays for editing
+        return;
+      }
+      if (res.data.confidence >= AUTO_SAVE_CONFIDENCE) {
+        const saved = await saveItems(res.data.items);
+        if (saved) {
+          // Prototype vpDone: brief ✓ then the overlay closes itself.
+          window.setTimeout(() => handleClose(), 1600);
+        }
+        return;
+      }
+      setItems(res.data.items); // low confidence → review before saving
+    } finally {
+      busyRef.current = false;
     }
-    setItems(res.data.items); // low confidence → review before saving
   }
 
   function removeItem(index: number) {
@@ -288,8 +298,13 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   async function handleSaveAll() {
-    if (!items || items.length === 0) return;
-    await saveItems(items);
+    if (busyRef.current || !items || items.length === 0) return;
+    busyRef.current = true;
+    try {
+      await saveItems(items);
+    } finally {
+      busyRef.current = false;
+    }
   }
 
   return (
@@ -358,6 +373,8 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
             onKeyDown={(e) => {
               // Enter submits (auto-add); Shift+Enter makes a new line.
+              // Held-down Enter auto-repeats — e.repeat must not resubmit.
+              if (e.repeat) return;
               if (e.key === "Enter" && !e.shiftKey && !listening) {
                 e.preventDefault();
                 void runFlow();

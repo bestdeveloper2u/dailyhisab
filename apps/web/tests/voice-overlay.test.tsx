@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { VoiceOverlay } from "../src/components/VoiceOverlay";
 import { makeResponse, renderWithProviders, resetLang, stubFetch, type RouteHandler } from "./helpers";
@@ -134,5 +134,38 @@ describe("VoiceOverlay (speak → auto-add)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("text too short");
     expect(screen.queryByText("পাওয়া খরচ")).not.toBeInTheDocument();
     expect(screen.getByRole("textbox")).toHaveValue("হ্যালো");
+  });
+
+  it("never submits twice — Enter auto-repeat and in-flight re-entry are guarded", async () => {
+    // Owner report: a typed expense got added two times. The parse call is a
+    // deferred promise so the first submit stays in flight for the whole test.
+    let resolveParse: ((res: Response) => void) | null = null;
+    const parseBodies: unknown[] = [];
+    const handler: RouteHandler = (req, url) => {
+      if (req.method === "POST" && url.pathname === "/api/v1/voice/parse") {
+        return req.json().then((body) => {
+          parseBodies.push(body);
+          return new Promise<Response>((resolve) => {
+            resolveParse = resolve;
+          });
+        });
+      }
+      return makeResponse(404, { detail: { code: "not_found", message_bn: "নেই", message_en: "missing" } });
+    };
+    stubFetch(handler);
+    renderWithProviders(<VoiceOverlay open onClose={() => {}} />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByRole("textbox"), "মাছ ৮৯০ টাকা");
+    await user.click(screen.getByRole("button", { name: "যোগ করুন" }));
+    expect(parseBodies).toHaveLength(1);
+
+    // Held-down Enter fires repeated keydowns — none may resubmit.
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter", repeat: true });
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter", repeat: true });
+
+    expect(parseBodies).toHaveLength(1);
+    expect(resolveParse).not.toBeNull();
+    resolveParse!(makeResponse(200, { items: [], confidence: 0.9 }));
   });
 });
