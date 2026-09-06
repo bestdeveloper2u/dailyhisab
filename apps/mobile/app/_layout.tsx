@@ -31,6 +31,7 @@ function RootNavigator() {
         <Stack.Screen name="report" />
         <Stack.Screen name="budget" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="recurring" />
       </Stack>
     </>
   );

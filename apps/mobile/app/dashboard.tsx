@@ -272,6 +272,20 @@ export default function Dashboard() {
 
         <Pressable
           style={({ pressed }) => [
+            styles.debtsButton,
+            pressed && styles.debtsButtonPressed,
+          ]}
+          onPress={() => router.push("/recurring")}
+          accessibilityRole="button"
+          accessibilityLabel={STRINGS.bn.openRecurring}
+        >
+          <Text style={styles.debtsButtonLabel} numberOfLines={1}>
+            {STRINGS.bn.openRecurring} →
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
             styles.backButton,
             pressed && styles.backButtonPressed,
           ]}

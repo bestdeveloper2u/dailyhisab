@@ -560,3 +560,168 @@ export function exportExpensesCsvUrl(params: ExportCsvParams = {}): string {
   const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
   return `${API_BASE}/api/v1/export/expenses.csv${suffix}`;
 }
+
+// --- Recurring expenses (Phase 5, T16.1/T16.3) ---------------------------------
+
+/**
+ * Rule cadence (T16.1): occurrences are driven by `start_date` — there are
+ * NO weekday/monthday fields on the wire.
+ */
+export type RecurringFreq = "daily" | "weekly" | "monthly" | "yearly";
+
+/**
+ * One recurring rule — GET/POST/PATCH /api/v1/recurring payload
+ * (RecurringOut). Keys mirror the DB columns exactly (T16.1 contract): no
+ * camelCase mapping.
+ */
+export interface Recurring {
+  id: string;
+  user_id: string;
+  cat: string;
+  grp: ExpenseGroup;
+  /** Decimal string "12000.00" — never a JSON number (ADR-0004 §1). */
+  amt: string;
+  pay: PayMethod;
+  /** Serialized as explicit null when absent (ADR-0004 §6). */
+  desc: string | null;
+  freq: RecurringFreq;
+  /** First occurrence "YYYY-MM-DD". */
+  start_date: string;
+  /**
+   * Next occurrence "YYYY-MM-DD" — server-owned, forward-only materialization
+   * cursor (ADR-0014 §3); never present in request bodies.
+   */
+  next_run: string;
+  /** Paused rules stay listed but are skipped by POST /recurring/run. */
+  active: boolean;
+  /** RFC 3339 UTC with Z (ADR-0004 §4). */
+  created_at: string;
+  updated_at: string;
+}
+
+/** Envelope for GET /api/v1/recurring (T16.1): keyset like expenses/debts. */
+export interface RecurringList {
+  items: Recurring[];
+  /** Opaque keyset cursor; null on the last page. */
+  next_cursor: string | null;
+}
+
+/** GET /api/v1/recurring query params; all optional. */
+export interface ListRecurringParams {
+  /** true = running rules only, false = paused only; omit for both. */
+  active?: boolean;
+  limit?: number; // 1..100, default 20
+  cursor?: string; // opaque next_cursor from the previous page
+}
+
+/**
+ * POST /api/v1/recurring body. `pay` defaults to "cash"; `start_date`
+ * defaults to today server-side (the first occurrence).
+ */
+export interface RecurringCreateInput {
+  cat: string; // 1..80 chars
+  grp: ExpenseGroup;
+  /** Decimal string matching ^\d{1,10}\.\d{2}$ — e.g. "12000.00". */
+  amt: string;
+  pay?: PayMethod;
+  desc?: string | null; // max 200 chars
+  freq: RecurringFreq;
+  /** "YYYY-MM-DD"; omit/null → server fills today. */
+  start_date?: string | null;
+}
+
+/** PATCH /api/v1/recurring/{id} body — all fields optional (partial update). */
+export interface RecurringUpdateInput {
+  cat?: string;
+  grp?: ExpenseGroup;
+  amt?: string;
+  pay?: PayMethod;
+  desc?: string | null;
+  freq?: RecurringFreq;
+  start_date?: string | null;
+  /** The active toggle. Paused rules stay listed but never auto-run. */
+  active?: boolean;
+}
+
+/**
+ * POST /api/v1/recurring/run result — what THIS run materialized
+ * (ADR-0014 §4). `created === expenses.length`.
+ */
+export interface RecurringRunResult {
+  /** The run date "YYYY-MM-DD" the server used. */
+  ran_on: string;
+  /** Expenses actually inserted (0 on an idempotent same-day re-run). */
+  created: number;
+  /** Due rules processed this run. */
+  rules: number;
+  /** The created expense rows. */
+  expenses: Expense[];
+}
+
+/** GET /api/v1/recurring (Bearer access) → 200 envelope; 400 invalid cursor. */
+export async function listRecurring(
+  accessToken: string,
+  params: ListRecurringParams = {},
+): Promise<RecurringList> {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      qs.set(key, String(value));
+    }
+  }
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+  return request<RecurringList>(`/api/v1/recurring${suffix}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/** POST /api/v1/recurring (Bearer access) → 201 stored rule; 422 validation. */
+export async function createRecurring(
+  accessToken: string,
+  input: RecurringCreateInput,
+): Promise<Recurring> {
+  return request<Recurring>("/api/v1/recurring", {
+    method: "POST",
+    body: JSON.stringify(input),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/** PATCH /api/v1/recurring/{id} (Bearer access) → 200 updated rule; 404 unknown/foreign id. */
+export async function updateRecurring(
+  accessToken: string,
+  id: string,
+  patch: RecurringUpdateInput,
+): Promise<Recurring> {
+  return request<Recurring>(`/api/v1/recurring/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/** DELETE /api/v1/recurring/{id} (Bearer access) → 204; 404 unknown/foreign id. */
+export async function deleteRecurring(
+  accessToken: string,
+  id: string,
+): Promise<void> {
+  await request<void>(`/api/v1/recurring/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/**
+ * POST /api/v1/recurring/run (Bearer access) → 200 summary; idempotent within
+ * a day (re-run ⇒ created=0). WRITES expenses — callers must confirm first.
+ */
+export async function runRecurring(
+  accessToken: string,
+): Promise<RecurringRunResult> {
+  return request<RecurringRunResult>("/api/v1/recurring/run", {
+    method: "POST",
+    body: JSON.stringify({}),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
