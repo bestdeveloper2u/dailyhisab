@@ -1,5 +1,9 @@
 import { moneyFromNumber, t as tCore } from "@khoroch/core";
-import { Redirect, useRouter } from "expo-router";
+import {
+  Redirect,
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -87,6 +91,8 @@ export default function AddExpense() {
   const router = useRouter();
   const { t } = usePrefs();
   const toast = useToast();
+  // T22.3 — dashboard empty-CTA deep link: /add?voice=1.
+  const { voice } = useLocalSearchParams<{ voice?: string }>();
 
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState("");
@@ -114,6 +120,23 @@ export default function AddExpense() {
   useEffect(() => {
     void loadSpeechModule().then((mod) => setVoiceSupported(mod !== null));
   }, []);
+
+  // T22.3 — auto-enter the recording phase when deep-linked with ?voice=1
+  // from the dashboard empty-CTA. Single-shot via ref guard (safe under
+  // StrictMode's double-invoked mount effects); fires only after the runtime
+  // probe confirms voice support (ADR-0013 guard). Unsupported/unknown →
+  // nothing happens: no auto-toast, the manual form is untouched.
+  const autoVoiceStarted = useRef(false);
+  useEffect(() => {
+    if (autoVoiceStarted.current || voice !== "1" || voiceSupported !== true) {
+      return;
+    }
+    autoVoiceStarted.current = true;
+    void beginVoice();
+    // beginVoice is hoisted and only touches idle-phase state on first run;
+    // the single-shot ref covers re-runs from params/probe identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice, voiceSupported]);
 
   // --- Draft autosave (T19.3 — web T19.2 twin) --------------------------------
   // The manual form is debounced-persisted to SecureStore; restored once on

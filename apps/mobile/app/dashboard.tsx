@@ -176,6 +176,59 @@ export default function Dashboard() {
               )}
             </View>
 
+            {/* T22.3 — prototype emptyCta parity: when the already-fetched
+                monthly report has zero entries, offer the two quick add paths
+                above the recent section instead of a dead-end empty note
+                (reuses the fetched report — no new requests). */}
+            {report !== null && report.count === 0 && (
+              <View style={styles.emptyCtaCard}>
+                <Text style={styles.emptyCtaTitle} numberOfLines={2}>
+                  {STRINGS.bn.emptyCtaTitle}
+                </Text>
+                <View style={styles.emptyCtaActions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptyCtaBtn,
+                      styles.emptyCtaBtnPrimary,
+                      pressed && styles.emptyCtaBtnPrimaryPressed,
+                    ]}
+                    onPress={() => router.push("/add")}
+                    accessibilityRole="button"
+                    accessibilityLabel={STRINGS.bn.emptyCtaAdd}
+                  >
+                    <Text
+                      style={styles.emptyCtaBtnPrimaryLabel}
+                      numberOfLines={2}
+                    >
+                      {STRINGS.bn.emptyCtaAdd}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptyCtaBtn,
+                      styles.emptyCtaBtnGhost,
+                      pressed && styles.emptyCtaBtnGhostPressed,
+                    ]}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/add",
+                        params: { voice: "1" },
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={STRINGS.bn.emptyCtaVoice}
+                  >
+                    <Text
+                      style={styles.emptyCtaBtnGhostLabel}
+                      numberOfLines={2}
+                    >
+                      {STRINGS.bn.emptyCtaVoice}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
             <View style={styles.card}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>
@@ -443,6 +496,61 @@ const styles = StyleSheet.create({
   emptyNote: {
     color: theme.colors.muted,
     fontSize: 13,
+  },
+  // --- Dashboard empty-state CTA (T22.3 — prototype emptyCta parity) -------
+  // Buttons sit side by side at 360px and wrap under font scaling; the
+  // 44px minHeight keeps both hit targets touch-friendly.
+  emptyCtaCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.card,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+    alignItems: "flex-start",
+  },
+  emptyCtaTitle: {
+    color: theme.colors.muted,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  emptyCtaActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignSelf: "stretch",
+    gap: theme.spacing.sm,
+  },
+  emptyCtaBtn: {
+    flexGrow: 1,
+    flexBasis: "45%",
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+  },
+  emptyCtaBtnPrimary: {
+    backgroundColor: theme.colors.emerald,
+  },
+  emptyCtaBtnPrimaryPressed: {
+    backgroundColor: theme.colors.emeraldSoft,
+  },
+  emptyCtaBtnGhost: {
+    backgroundColor: theme.colors.surface2,
+  },
+  emptyCtaBtnGhostPressed: {
+    opacity: 0.8,
+  },
+  emptyCtaBtnPrimaryLabel: {
+    color: theme.colors.onAccent,
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  emptyCtaBtnGhostLabel: {
+    color: theme.colors.ink,
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
   },
   centerNote: {
     color: theme.colors.muted,

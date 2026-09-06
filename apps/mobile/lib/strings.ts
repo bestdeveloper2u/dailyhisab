@@ -52,6 +52,11 @@ export const STRINGS = {
     noExpensesThisMonth: "এই মাসে কোনো খরচ নেই।",
     openDebts: "ধার-দেনা",
 
+    // Dashboard empty-state CTA (T22.3 — prototype emptyCta parity)
+    emptyCtaTitle: "আজ কোনো খরচ হয়নি",
+    emptyCtaAdd: "✏️ এখনই যোগ করুন",
+    emptyCtaVoice: "🎙 বলে যোগ করুন",
+
     // All-expenses list (T12.2 — prototype screen-list parity)
     listTitle: "খরচ তালিকা",
     listSub: "সব মাসের এন্ট্রি এক জায়গায়",
@@ -301,6 +306,11 @@ export const STRINGS = {
     recentExpenses: "Recent expenses",
     noExpensesThisMonth: "No expenses this month.",
     openDebts: "Debts",
+
+    // Dashboard empty-state CTA (T22.3 — prototype emptyCta parity)
+    emptyCtaTitle: "No expenses yet today",
+    emptyCtaAdd: "✏️ Add now",
+    emptyCtaVoice: "🎙 Speak to add",
 
     // All-expenses list (T12.2 — prototype screen-list parity)
     listTitle: "All expenses",
