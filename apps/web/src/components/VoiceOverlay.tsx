@@ -49,6 +49,13 @@ type RecognitionCtor = new () => RecognitionLike;
 const AUTO_SAVE_CONFIDENCE = 0.7;
 
 /**
+ * Silence that ends a dictation: after this long with no new speech the mic
+ * stops by itself and the transcript auto-adds (owner: "too many issues" —
+ * users spoke, waited, nothing happened because nobody re-pressed the mic).
+ */
+export const SILENCE_AUTO_SUBMIT_MS = 2000;
+
+/**
  * Google-Translate-style dictation: continuous + interim results, so words
  * appear live while the user speaks. bn-BD rides Chrome's server engine.
  */
@@ -100,12 +107,38 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   const wantListenRef = useRef(false);
   const fatalRef = useRef(false);
   const restartsRef = useRef(0);
+  // Live mirror of `text` so timer/async closures never read stale state.
+  const textRef = useRef("");
+  const silenceTimerRef = useRef<number | null>(null);
 
   const micSupported = useMemo(() => getRecognition() !== null, []);
   const pending = parse.isPending || bulkCreate.isPending;
 
+  function setTextBoth(v: string) {
+    textRef.current = v;
+    setText(v);
+  }
+
+  function clearSilenceTimer() {
+    if (silenceTimerRef.current !== null) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }
+
+  /** 2s of silence ends the dictation: mic stops → auto-add fires. */
+  function armSilenceSubmit() {
+    clearSilenceTimer();
+    silenceTimerRef.current = window.setTimeout(() => {
+      silenceTimerRef.current = null;
+      if (wantListenRef.current && textRef.current.trim()) {
+        stopListening();
+      }
+    }, SILENCE_AUTO_SUBMIT_MS);
+  }
+
   function reset() {
-    setText("");
+    setTextBoth("");
     setItems(null);
     setConfidence(null);
     setSavedCount(null);
@@ -114,7 +147,14 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   function handleClose() {
+    if (listening) {
+      // ✕ while dictating = stop + submit — the overlay exists to add, so
+      // closing must never silently discard what was said.
+      stopListening();
+      return;
+    }
     wantListenRef.current = false;
+    clearSilenceTimer();
     recRef.current?.stop();
     reset();
     onClose();
@@ -123,7 +163,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   /** Compose textarea = base text + committed finals + live interim. */
   function renderTranscript(interim: string) {
     const parts = [baseTextRef.current, finalRef.current.trim(), interim.trim()];
-    setText(parts.filter(Boolean).join(" "));
+    setTextBoth(parts.filter(Boolean).join(" "));
   }
 
   function startListening() {
@@ -139,20 +179,21 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     setError(null);
     setNote(null);
     rec.onresult = (e: SpeechEvent) => {
+      // Rebuild finals from the full results array every event — idempotent,
+      // so engines that re-deliver a final can never duplicate the transcript
+      // (owner report: words appearing twice).
       let interim = "";
-      for (let i = e.resultIndex ?? 0; i < e.results.length; i++) {
+      const finals: string[] = [];
+      for (let i = 0; i < e.results.length; i++) {
         const r = e.results[i];
         const said = r?.[0]?.transcript ?? "";
         if (!said) continue;
-        if (r.isFinal) {
-          finalRef.current = finalRef.current
-            ? `${finalRef.current} ${said}`
-            : said;
-        } else {
-          interim += said;
-        }
+        if (r.isFinal) finals.push(said);
+        else interim += said;
       }
+      finalRef.current = finals.join(" ");
       renderTranscript(interim);
+      armSilenceSubmit();
     };
     rec.onerror = (e: SpeechErrorEvent) => {
       switch (e.error) {
@@ -181,6 +222,13 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     };
     rec.onend = () => {
       setListening(false);
+      clearSilenceTimer();
+      // Commit this session's finals into the base so the restart below can
+      // neither lose them (new session = empty results) nor duplicate them.
+      baseTextRef.current = [baseTextRef.current, finalRef.current.trim()]
+        .filter(Boolean)
+        .join(" ");
+      finalRef.current = "";
       // Google-Translate feel: keep the mic alive across pauses until the
       // user presses stop or a fatal error occurred.
       if (wantListenRef.current && !fatalRef.current && restartsRef.current < 30) {
@@ -196,6 +244,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     };
     try {
       rec.start();
+      armSilenceSubmit();
     } catch {
       setListening(false);
       setError(w(lang, "errFallback"));
@@ -204,6 +253,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
 
   function stopListening() {
     wantListenRef.current = false;
+    clearSilenceTimer();
     recRef.current?.stop();
     setListening(false);
     // Auto-add: stopping the mic IS the submit — no separate "find" tap.
@@ -219,11 +269,20 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     if (busyRef.current) return;
     setError(null);
     setSavedCount(null);
-    const transcript = text.trim();
+    // textRef (not the state closure) so the silence-timer path always sees
+    // the latest transcript.
+    const transcript = (textRef.current ?? text).trim();
     if (!transcript || pending) return;
     busyRef.current = true;
     try {
-      const res = await parse.mutateAsync(transcript);
+      let res;
+      try {
+        res = await parse.mutateAsync(transcript);
+      } catch {
+        // fetch-level failure (offline, DNS, timeout) — TanStack rethrows.
+        setError(w(lang, "voiceNetErr"));
+        return;
+      }
       if (!res.ok) {
         setError(res.detail || w(lang, "errFallback"));
         return;
@@ -278,12 +337,18 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
       setError(w(lang, "errAmt"));
       return false;
     }
-    const res = await bulkCreate.mutateAsync(clean);
+    let res;
+    try {
+      res = await bulkCreate.mutateAsync(clean);
+    } catch {
+      setError(w(lang, "errFallback"));
+      return false;
+    }
     if (res.ok) {
       const count = res.data.length;
       setSavedCount(count);
       setItems(null);
-      setText("");
+      setTextBoth("");
       setConfidence(null);
       // Prototype parity: announce the batch save (e.g. "✓ ২টি সংরক্ষিত হয়েছে").
       toast(
@@ -370,7 +435,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
             ref={textAreaRef}
             rows={3}
             value={text}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setTextBoth(e.target.value)}
             onKeyDown={(e) => {
               // Enter submits (auto-add); Shift+Enter makes a new line.
               // Held-down Enter auto-repeats — e.repeat must not resubmit.
@@ -386,8 +451,8 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
           {listening && (
             <p className="text-[11px] text-muted">
               {lang === "bn"
-                ? "বলতে থাকুন — লেখা এখনই এখানে আসবে। শেষ হলে মাইক বন্ধ করুন।"
-                : "Keep speaking — words appear here live. Press the mic to finish."}
+                ? "বলতে থাকুন — ২ সেকেন্ড থামলেই অটো-যোগ হবে। চাইলে মাইক বন্ধ করেও যোগ করা যায়।"
+                : "Keep speaking — pause 2s to auto-add, or press the mic to finish."}
             </p>
           )}
         </div>

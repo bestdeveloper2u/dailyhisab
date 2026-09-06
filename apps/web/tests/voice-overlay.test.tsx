@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { VoiceOverlay } from "../src/components/VoiceOverlay";
+import { SILENCE_AUTO_SUBMIT_MS, VoiceOverlay } from "../src/components/VoiceOverlay";
 import { makeResponse, renderWithProviders, resetLang, stubFetch, type RouteHandler } from "./helpers";
 
 const after = () => vi.unstubAllGlobals();
@@ -167,5 +167,91 @@ describe("VoiceOverlay (speak → auto-add)", () => {
     expect(parseBodies).toHaveLength(1);
     expect(resolveParse).not.toBeNull();
     resolveParse!(makeResponse(200, { items: [], confidence: 0.9 }));
+  });
+
+  it("re-delivered final results never duplicate the transcript", async () => {
+    const instances: FakeRecognition[] = [];
+    class FakeRecognition {
+      lang = "";
+      continuous = false;
+      interimResults = false;
+      onresult: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      start = vi.fn(() => instances.push(this));
+      stop = vi.fn();
+    }
+    vi.stubGlobal("SpeechRecognition", FakeRecognition);
+    renderWithProviders(<VoiceOverlay open onClose={() => {}} />);
+    const mic = screen.getByRole("button", { name: "মাইক্রোফোন" });
+    fireEvent.click(mic);
+    expect(instances.length).toBeGreaterThan(0);
+    const rec = instances[0];
+
+    const evt = (results: Array<{ t: string; final: boolean }>) => ({
+      resultIndex: 0,
+      results: results.map((r) => ({ 0: { transcript: r.t }, isFinal: r.final, length: 1 })),
+    });
+
+    // Final delivered, then re-delivered by the engine (Android quirk), then
+    // an interim follows — the committed text must contain it exactly once.
+    // Direct handler calls must run inside act() so state flushes.
+    act(() => rec.onresult?.(evt([{ t: "মাছ ৮৯০ টাকা", final: true }])));
+    act(() => rec.onresult?.(evt([{ t: "মাছ ৮৯০ টাকা", final: true }])));
+    act(() =>
+      rec.onresult?.(evt([{ t: "মাছ ৮৯০ টাকা", final: true }, { t: " চাল", final: false }])),
+    );
+    expect(screen.getByRole("textbox")).toHaveValue("মাছ ৮৯০ টাকা চাল");
+
+    // Stop the mic so the armed silence timer cannot leak into other tests.
+    fireEvent.click(screen.getByRole("button", { name: "শুনছি…" }));
+  });
+
+  it("auto-adds after 2s of silence while listening", async () => {
+    const parseBodies: unknown[] = [];
+    stubFetch((req, url) => {
+      if (req.method === "POST" && url.pathname === "/api/v1/voice/parse") {
+        return req.json().then((body) => {
+          parseBodies.push(body);
+          return makeResponse(200, {
+            items: [{ amt: "890", cat: "মাছ", grp: "food", pay: null, iso: null, desc: null }],
+            confidence: 0.95,
+          });
+        });
+      }
+      if (req.method === "POST" && url.pathname === "/api/v1/expenses/bulk") {
+        return req.json().then((body) => {
+          const items = (body as { items: unknown[] }).items;
+          return makeResponse(201, { items: items.map((_, i) => ({ id: `b${i}` })) });
+        });
+      }
+      return makeResponse(404, { detail: { code: "not_found", message_bn: "নেই", message_en: "missing" } });
+    });
+    const instances: FakeRecognition2[] = [];
+    class FakeRecognition2 {
+      lang = "";
+      continuous = false;
+      interimResults = false;
+      onresult: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      start = vi.fn(() => instances.push(this));
+      stop = vi.fn();
+    }
+    vi.stubGlobal("SpeechRecognition", FakeRecognition2);
+    renderWithProviders(<VoiceOverlay open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "মাইক্রোফোন" }));
+    act(() =>
+      instances[0].onresult?.({
+        resultIndex: 0,
+        results: [{ 0: { transcript: "মাছ ৮৯০ টাকা" }, isFinal: true, length: 1 }],
+      }),
+    );
+
+    // Nobody presses anything — silence alone must submit the expense.
+    await new Promise((r) => setTimeout(r, SILENCE_AUTO_SUBMIT_MS + 150));
+
+    expect(parseBodies).toEqual([{ text: "মাছ ৮৯০ টাকা" }]);
+    expect(await screen.findByText("✓ ১ সংরক্ষিত হয়েছে")).toBeInTheDocument();
   });
 });
