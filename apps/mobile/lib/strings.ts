@@ -185,6 +185,7 @@ export const STRINGS = {
     toastRecurringDeleted: "পুনরাবৃত্তি মুছে ফেলা হয়েছে ✓",
     toastRecurringRunSuffix: "টি খরচ যোগ হয়েছে ✓",
     toastRecurringRunZero: "নতুন কোনো খরচ যোগ হয়নি — সব আপ-টু-ডেট ✓",
+    toastRecurringBootAdded: "টি আবর্তনশীল খরচ যোগ হয়েছে",
 
     // Settings (T11.3)
     settings: "সেটিংস",
@@ -406,6 +407,7 @@ export const STRINGS = {
     toastRecurringDeleted: "Recurring expense deleted ✓",
     toastRecurringRunSuffix: "expenses created ✓",
     toastRecurringRunZero: "No new expenses — everything is up to date ✓",
+    toastRecurringBootAdded: "recurring expenses added",
 
     // Settings (T11.3) — segment labels stay বাংলা/English in both locales,
     // and the voice chip stays bn-BD (matches the prototype).
