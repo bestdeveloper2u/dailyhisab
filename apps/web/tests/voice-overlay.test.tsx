@@ -1,8 +1,18 @@
+import type { ReactElement } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { SILENCE_AUTO_SUBMIT_MS, VoiceOverlay } from "../src/components/VoiceOverlay";
-import { makeResponse, renderWithProviders, resetLang, stubFetch, type RouteHandler } from "./helpers";
+import {
+  makeQueryClient,
+  makeResponse,
+  renderWithProviders,
+  resetLang,
+  stubFetch,
+  type RouteHandler,
+} from "./helpers";
 
 const after = () => vi.unstubAllGlobals();
 
@@ -253,5 +263,108 @@ describe("VoiceOverlay (speak → auto-add)", () => {
 
     expect(parseBodies).toEqual([{ text: "মাছ ৮৯০ টাকা" }]);
     expect(await screen.findByText("✓ ১ সংরক্ষিত হয়েছে")).toBeInTheDocument();
+  });
+});
+
+/*
+ * T23.2 Web Share Target prefill: Expenses passes shared text as
+ * `initialText`; on the closed→open transition the textarea is prefilled and
+ * the SAME parse flow a manual tap triggers runs exactly once, parking at
+ * the confirm step. Without initialText nothing changes.
+ */
+describe("VoiceOverlay initialText (T23.2 share-target prefill)", () => {
+  /** Providers built here so tests can rerender with new props. */
+  function renderOverlay(ui: ReactElement) {
+    const queryClient = makeQueryClient();
+    const tree = (node: ReactElement) => (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>{node}</MemoryRouter>
+      </QueryClientProvider>
+    );
+    const view = render(tree(ui));
+    return { ...view, rerender: (node: ReactElement) => view.rerender(tree(node)) };
+  }
+
+  it("prefills the textarea and auto-parses the shared text exactly once", async () => {
+    const parseBodies: unknown[] = [];
+    stubFetch(
+      voiceHandler({
+        parseResult: {
+          items: [{ amt: "40", cat: "চা", grp: "food", pay: null, iso: null, desc: null }],
+          confidence: 0.4,
+        },
+        onParse: (b) => parseBodies.push(b),
+      }),
+    );
+    renderOverlay(<VoiceOverlay open initialText="চায়ে ৪০ টাকা" onClose={() => {}} />);
+
+    // Prefilled…
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue(
+      "চায়ে ৪০ টাকা",
+    );
+    // …auto-parsed once (same pipeline as a manual "যোগ করুন" tap)…
+    await waitFor(() => expect(parseBodies).toEqual([{ text: "চায়ে ৪০ টাকা" }]));
+    // …and parked at the confirm step (low confidence → review list).
+    expect(await screen.findByText("পাওয়া খরচ")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue(
+      "চায়ে ৪০ টাকা",
+    );
+    expect(parseBodies).toHaveLength(1);
+  });
+
+  it("parse failure leaves the shared text in the textarea for manual confirm", async () => {
+    stubFetch(() => makeResponse(422, { detail: [{ msg: "text too short", type: "value_error" }] }));
+    renderOverlay(<VoiceOverlay open initialText="হ্যালো" onClose={() => {}} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("text too short");
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue("হ্যালো");
+    // The add button returns so the user can edit and retry.
+    expect(screen.getByRole("button", { name: "যোগ করুন" })).toBeInTheDocument();
+  });
+
+  it("re-opening without initialText never re-applies (Expenses clears the prop on close)", async () => {
+    const parseBodies: unknown[] = [];
+    const onClose = vi.fn();
+    stubFetch(
+      voiceHandler({
+        parseResult: {
+          items: [{ amt: "40", cat: "চা", grp: "food", pay: null, iso: null, desc: null }],
+          confidence: 0.4,
+        },
+        onParse: (b) => parseBodies.push(b),
+      }),
+    );
+    const view = renderOverlay(<VoiceOverlay open initialText="চায়ে ৪০ টাকা" onClose={onClose} />);
+    await screen.findByText("পাওয়া খরচ");
+    expect(parseBodies).toHaveLength(1);
+
+    // Close via ✕ (reset() + onClose run — exactly Expenses' path), then
+    // reopen from the mic button: no initialText, so nothing re-prefills
+    // or re-parses.
+    await userEvent.setup().click(screen.getByRole("button", { name: "বাতিল" }));
+    view.rerender(<VoiceOverlay open={false} onClose={onClose} />);
+    view.rerender(<VoiceOverlay open onClose={onClose} />);
+    expect(await screen.findByRole("dialog", { name: "ভয়েসে খরচ যোগ করুন" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue("");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(parseBodies).toHaveLength(1);
+  });
+
+  it("no initialText → no prefill and no auto-parse (behavior unchanged)", async () => {
+    const parseBodies: unknown[] = [];
+    stubFetch(
+      voiceHandler({
+        parseResult: { items: [], confidence: 0.9 },
+        onParse: (b) => parseBodies.push(b),
+      }),
+    );
+    renderOverlay(<VoiceOverlay open onClose={() => {}} />);
+
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue("");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(parseBodies).toEqual([]);
+    // Empty text → the add button stays hidden (same as before this feature).
+    expect(screen.queryByRole("button", { name: "যোগ করুন" })).not.toBeInTheDocument();
   });
 });

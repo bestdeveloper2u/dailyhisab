@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useSearchParams } from "react-router";
 import { Expenses } from "../src/screens/Expenses";
 import { makeResponse, renderWithProviders, resetLang, stubFetch, type RouteHandler } from "./helpers";
 import { subscribeToasts } from "../src/lib/toast";
@@ -157,6 +158,171 @@ describe("Expenses screen (real API shapes)", () => {
 
     expect(await screen.findByText("কোনো খরচ নেই")).toBeInTheDocument();
     expect(screen.getByText("প্রথম খরচ যোগ করুন — লিখে বা ভয়েসে বলুন")).toBeInTheDocument();
+  });
+});
+
+/*
+ * T23.2 Web Share Target intake: sharing text (e.g. "চায়ে ৪০ টাকা") from
+ * another Android app GETs /expenses/?text=…&title=… (manifest share_target
+ * in vite.config.ts; feature docs
+ * https://developer.chrome.com/docs/capabilities/web-apis/web-share-target).
+ * The screen must open the voice overlay PRE-FILLED and auto-run the parse —
+ * stopping at the confirm step, never a blind create — then clear the
+ * params exactly like the ?voice=1 / ?add=1 deep links.
+ */
+describe("Expenses Web Share Target intake (T23.2)", () => {
+  /** Mirrors the live query string so tests can assert params were cleared. */
+  function SearchProbe() {
+    const [sp] = useSearchParams();
+    return <span data-testid="search-probe">{sp.toString()}</span>;
+  }
+
+  /** Empty list + a low-confidence parse, so the flow parks at review. */
+  function shareHandler(
+    opts: { onParse?: (body: unknown) => void; onBulk?: (body: unknown) => void } = {},
+  ): RouteHandler {
+    return (req, url) => {
+      if (req.method === "GET" && url.pathname === "/api/v1/expenses") {
+        return makeResponse(200, { items: [], next_cursor: null });
+      }
+      if (req.method === "POST" && url.pathname === "/api/v1/voice/parse") {
+        return req.json().then((body) => {
+          opts.onParse?.(body);
+          return makeResponse(200, {
+            items: [{ amt: "40", cat: "চা", grp: "food", pay: null, iso: null, desc: null }],
+            confidence: 0.4,
+          });
+        });
+      }
+      if (req.method === "POST" && url.pathname === "/api/v1/expenses/bulk") {
+        return req.json().then((body) => {
+          opts.onBulk?.(body);
+          return makeResponse(201, { items: [{ id: "bulk-0" }] });
+        });
+      }
+      return makeResponse(404, { detail: { code: "not_found", message_bn: "নেই", message_en: "missing" } });
+    };
+  }
+
+  it("?text= opens the voice overlay prefilled, parses once, parks at confirm, clears params", async () => {
+    const parseBodies: unknown[] = [];
+    const bulkBodies: unknown[] = [];
+    stubFetch(shareHandler({ onParse: (b) => parseBodies.push(b), onBulk: (b) => bulkBodies.push(b) }));
+    renderWithProviders(
+      <>
+        <Expenses />
+        <SearchProbe />
+      </>,
+      { route: `/expenses?text=${encodeURIComponent("চায়ে ৪০ টাকা")}` },
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "ভয়েসে খরচ যোগ করুন" });
+    const textarea = within(dialog).getByRole("textbox", {
+      name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন",
+    });
+    expect(textarea).toHaveValue("চায়ে ৪০ টাকা");
+
+    // The SAME parse flow a manual "যোগ করুন" tap would run — exactly once…
+    await waitFor(() => expect(parseBodies).toEqual([{ text: "চায়ে ৪০ টাকা" }]));
+    // …and it stops at the review/confirm step: no blind create.
+    expect(await screen.findByText("পাওয়া খরচ")).toBeInTheDocument();
+    expect(textarea).toHaveValue("চায়ে ৪০ টাকা");
+    expect(bulkBodies).toHaveLength(0);
+
+    // Share params are consumed like the other deep links.
+    await waitFor(() => expect(screen.getByTestId("search-probe")).toHaveTextContent(/^$/));
+  });
+
+  it("?title= is the fallback when text is missing or whitespace-only", async () => {
+    const parseBodies: unknown[] = [];
+    stubFetch(shareHandler({ onParse: (b) => parseBodies.push(b) }));
+    renderWithProviders(
+      <>
+        <Expenses />
+        <SearchProbe />
+      </>,
+      {
+        route: `/expenses?text=${encodeURIComponent("   ")}&title=${encodeURIComponent("রিকশা তিনশো টাকা")}`,
+      },
+    );
+
+    await screen.findByRole("dialog", { name: "ভয়েসে খরচ যোগ করুন" });
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue(
+      "রিকশা তিনশো টাকা",
+    );
+    await waitFor(() => expect(parseBodies).toEqual([{ text: "রিকশা তিনশো টাকা" }]));
+  });
+
+  it("non-empty text wins over title when both are shared", async () => {
+    const parseBodies: unknown[] = [];
+    stubFetch(shareHandler({ onParse: (b) => parseBodies.push(b) }));
+    renderWithProviders(
+      <>
+        <Expenses />
+        <SearchProbe />
+      </>,
+      {
+        route: `/expenses?text=${encodeURIComponent("চায়ে ৪০ টাকা")}&title=${encodeURIComponent("শুধু শিরোনাম")}`,
+      },
+    );
+
+    await screen.findByRole("dialog", { name: "ভয়েসে খরচ যোগ করুন" });
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue(
+      "চায়ে ৪০ টাকা",
+    );
+    await waitFor(() => expect(parseBodies).toEqual([{ text: "চায়ে ৪০ টাকা" }]));
+  });
+
+  it("no text/title (plain deep link) → overlay stays closed", async () => {
+    stubFetch(shareHandler());
+    renderWithProviders(
+      <>
+        <Expenses />
+        <SearchProbe />
+      </>,
+      { route: "/expenses" },
+    );
+
+    await screen.findByText("কোনো খরচ নেই");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("?url= alone is ignored (unsolicited links are a spam vector)", async () => {
+    stubFetch(shareHandler());
+    renderWithProviders(
+      <>
+        <Expenses />
+        <SearchProbe />
+      </>,
+      { route: `/expenses?url=${encodeURIComponent("https://evil.example/claim?amt=999")}` },
+    );
+
+    await screen.findByText("কোনো খরচ নেই");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shared text is trimmed and capped at 300 chars", async () => {
+    const parseBodies: unknown[] = [];
+    stubFetch(shareHandler({ onParse: (b) => parseBodies.push(b) }));
+    renderWithProviders(
+      <>
+        <Expenses />
+        <SearchProbe />
+      </>,
+      { route: `/expenses?text=${encodeURIComponent(`  ${"চা".repeat(400)}  `)}` },
+    );
+
+    await screen.findByRole("dialog", { name: "ভয়েসে খরচ যোগ করুন" });
+    // The cap is 300 UTF-16 code units — "চা" is 2 code units, so 150
+    // graphemes survive the slice.
+    const expected = "চা".repeat(150);
+    const textarea = screen.getByRole("textbox", {
+      name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন",
+    }) as HTMLTextAreaElement;
+    expect(textarea.value).toHaveLength(300);
+    expect(textarea).toHaveValue(expected);
+    await waitFor(() => expect(parseBodies).toEqual([{ text: expected }]));
   });
 });
 

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { moneyToNumber, toBnDigits } from "@khoroch/core";
 import type { ParsedExpense } from "@khoroch/api-client";
 import {
@@ -103,6 +103,7 @@ export function VoiceOverlay({
   onClose,
   mode = "expense",
   parties = [],
+  initialText,
 }: {
   open: boolean;
   onClose: () => void;
@@ -110,6 +111,11 @@ export function VoiceOverlay({
   mode?: VoiceOverlayMode;
   /** Known party names for the debt-mode datalist autocomplete. */
   parties?: string[];
+  /**
+   * T23.2 Web Share Target: text shared into the PWA (e.g. "চায়ে ৪০ টাকা").
+   * Applied once on the closed→open transition; absent → no behavior change.
+   */
+  initialText?: string;
 }) {
   const lang = useLangStore((s) => s.lang);
   const parse = useVoiceParse();
@@ -143,6 +149,38 @@ export function VoiceOverlay({
   // Live mirror of `text` so timer/async closures never read stale state.
   const textRef = useRef("");
   const silenceTimerRef = useRef<number | null>(null);
+
+  /*
+   * T23.2 Web Share Target prefill: when the overlay opens with shared text
+   * and the textarea is still empty, prefill it via setTextBoth (textRef
+   * stays in sync) and run the SAME parse flow a manual "যোগ করুন" tap
+   * would. Ref-guarded one-shot per closed→open transition, so StrictMode's
+   * mount double-invoke and plain re-renders can neither re-apply it nor
+   * double-parse. Parse failure leaves the text in the textarea for manual
+   * confirm — nothing is ever saved blind. No initialText → unchanged.
+   *
+   * Latest-ref pattern (as in Modal) keeps the effect on the minimal
+   * [open, initialText] deps although it calls per-render closures.
+   */
+  const prefillDoneRef = useRef(false);
+  const setTextBothRef = useRef(setTextBoth);
+  const runFlowRef = useRef(runFlow);
+  useEffect(() => {
+    setTextBothRef.current = setTextBoth;
+    runFlowRef.current = runFlow;
+  });
+  useEffect(() => {
+    if (!open) {
+      prefillDoneRef.current = false;
+      return;
+    }
+    if (prefillDoneRef.current) return;
+    prefillDoneRef.current = true;
+    const shared = (initialText ?? "").trim();
+    if (!shared || textRef.current.trim() !== "") return;
+    setTextBothRef.current(shared);
+    void runFlowRef.current();
+  }, [open, initialText]);
 
   const micSupported = useMemo(() => getRecognition() !== null, []);
   const pending = parse.isPending || bulkCreate.isPending || putBudget.isPending;

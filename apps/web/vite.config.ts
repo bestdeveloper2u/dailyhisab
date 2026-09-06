@@ -64,6 +64,28 @@ export default defineConfig({
             icons: [{ src: "pwa-192x192.png", sizes: "192x192", type: "image/png" }],
           },
         ],
+        /*
+         * Web Share Target (T23.2): share text (e.g. "চায়ে ৪০ টাকা") from
+         * any Android app into the installed PWA. Feature owner docs:
+         * https://developer.chrome.com/docs/capabilities/web-apis/web-share-target
+         * — Chrome/Android + installed-PWA-only, a progressive enhancement
+         * (browsers/launch contexts without support never see it). Note: the
+         * current W3C TR/appmanifest draft no longer contains share_target
+         * (verified 0 hits this cycle), so the Chrome docs above are the
+         * citation of record. The GET lands on /expenses/?title=&text=&url=,
+         * which Expenses.tsx turns into a pre-filled voice overlay (user
+         * still confirms); `url` is declared but deliberately ignored at
+         * intake — unsolicited links are a spam vector.
+         */
+        share_target: {
+          action: "/expenses/",
+          method: "GET",
+          params: {
+            title: "title",
+            text: "text",
+            url: "url",
+          },
+        },
         // Colors from the frozen prototype palette (www/index.html :root).
         theme_color: "#0E6B50",
         background_color: "#F6F5F1",

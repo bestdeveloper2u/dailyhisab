@@ -135,19 +135,41 @@ export function Expenses() {
   const [month, setMonth] = useState<string | null>(null); // null = All
   const [formOpen, setFormOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // Web Share Target intake (T23.2): text shared from another Android app,
+  // passed to the voice overlay as initialText (cleared on overlay close so
+  // a later manual reopen never re-applies the share).
+  const [sharedText, setSharedText] = useState<string | null>(null);
   // CSV import (owner ask: sheet data must come IN, not only out).
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // The shell FAB deep-links here with ?voice=1 / ?add=1.
+  // The shell FAB deep-links here with ?voice=1 / ?add=1. T23.2 adds the Web
+  // Share Target intake (manifest share_target in vite.config.ts; feature
+  // owner docs https://developer.chrome.com/docs/capabilities/web-apis/
+  // web-share-target — Chrome/Android, installed-PWA-only, progressive
+  // enhancement). A share GETs /expenses/?text=…&title=…: we only open +
+  // prefill the voice overlay (the user still confirms — no blind creates)
+  // and clear the params like the other deep links. Non-empty `text` beats
+  // `title`; `url` is ignored on purpose (unsolicited links = spam vector).
   useEffect(() => {
     if (searchParams.get("voice") === "1") {
       setVoiceOpen(true);
       setSearchParams({}, { replace: true });
-    } else if (searchParams.get("add") === "1") {
+      return;
+    }
+    if (searchParams.get("add") === "1") {
       setFormOpen(true);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    const fromText = searchParams.get("text")?.trim() ?? "";
+    const fromTitle = searchParams.get("title")?.trim() ?? "";
+    const shared = (fromText || fromTitle).slice(0, 300);
+    if (shared) {
+      setSharedText(shared);
+      setVoiceOpen(true);
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -444,7 +466,14 @@ export function Expenses() {
           setEditTarget(null);
         }}
       />
-      <VoiceOverlay open={voiceOpen} onClose={() => setVoiceOpen(false)} />
+      <VoiceOverlay
+        open={voiceOpen}
+        onClose={() => {
+          setVoiceOpen(false);
+          setSharedText(null);
+        }}
+        initialText={sharedText ?? undefined}
+      />
 
       {/* CSV import preview: count + total before anything is saved. */}
       {importPreview && (
