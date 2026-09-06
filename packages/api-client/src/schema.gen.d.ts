@@ -304,6 +304,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expenses/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Khata Categories
+         * @description Distinct khatas derived from the caller's expense history (ADR-0019).
+         *
+         *     One row per distinct ``cat``: ``grp``/``last_used`` come from the khata's
+         *     most recent expense (window pass, portable across SQLite/Postgres — no
+         *     ``DISTINCT ON``), ``use_count`` from a partition count. Ordered
+         *     most-used → most-recent → cat. A khata set is bounded by the user's own
+         *     distinct cats, so it is picker-sized and unpaginated.
+         */
+        get: operations["list_khata_categories_api_v1_expenses_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expenses/{expense_id}": {
         parameters: {
             query?: never;
@@ -913,6 +939,40 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+        };
+        /**
+         * KhataListOut
+         * @description Envelope for GET /expenses/categories (ADR-0004 §8; cursor always null).
+         */
+        KhataListOut: {
+            /** Items */
+            items: components["schemas"]["KhataOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * KhataOut
+         * @description One distinct khata (category) derived from the caller's history.
+         *
+         *     ``grp``/``last_used`` come from the khata's *most recent* expense and are
+         *     prefill hints only — reports/budgets keep grouping each expense row by its
+         *     own ``grp`` (ADR-0019).
+         */
+        KhataOut: {
+            /** Cat */
+            cat: string;
+            /**
+             * Grp
+             * @enum {string}
+             */
+            grp: "food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other";
+            /**
+             * Last Used
+             * Format: date
+             */
+            last_used: string;
+            /** Use Count */
+            use_count: number;
         };
         /**
          * LoginIn
@@ -1717,6 +1777,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_khata_categories_api_v1_expenses_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KhataListOut"];
                 };
             };
         };

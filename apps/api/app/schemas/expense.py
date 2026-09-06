@@ -135,6 +135,27 @@ class BulkExpensesOut(BaseModel):
     items: list[ExpenseOut]
 
 
+class KhataOut(BaseModel):
+    """One distinct khata (category) derived from the caller's history.
+
+    ``grp``/``last_used`` come from the khata's *most recent* expense and are
+    prefill hints only — reports/budgets keep grouping each expense row by its
+    own ``grp`` (ADR-0019).
+    """
+
+    cat: str
+    grp: ExpenseGroup
+    use_count: int = Field(ge=1)
+    last_used: date
+
+
+class KhataListOut(BaseModel):
+    """Envelope for GET /expenses/categories (ADR-0004 §8; cursor always null)."""
+
+    items: list[KhataOut]
+    next_cursor: str | None = None
+
+
 class VoiceParseIn(BaseModel):
     """POST /voice/parse body."""
 

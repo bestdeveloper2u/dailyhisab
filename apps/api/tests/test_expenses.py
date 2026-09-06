@@ -289,3 +289,75 @@ async def test_endpoints_require_auth(client: AsyncClient) -> None:
     assert (await client.get(EXP)).status_code == 401
     assert (await client.post(EXP, json=expense_body())).status_code == 401
     assert (await client.post(f"{EXP}/bulk", json={"items": [expense_body()]})).status_code == 401
+    assert (await client.get(f"{EXP}/categories")).status_code == 401
+
+
+# --- GET /expenses/categories (ADR-0019 history-derived khatas) --------------
+
+
+async def test_categories_empty_history(client: AsyncClient) -> None:
+    headers, _ = await register_user(client, email="cats-empty@test.dev")
+    r = await client.get(f"{EXP}/categories", headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"items": [], "next_cursor": None}
+
+
+async def test_categories_grp_from_most_recent(client: AsyncClient) -> None:
+    """grp/last_used reflect the khata's MOST RECENT expense, not the first."""
+    headers, _ = await register_user(client, email="cats-grp@test.dev")
+    await client.post(
+        EXP,
+        json=expense_body(cat="চা", grp="food", iso="2026-09-01"),
+        headers=headers,
+    )
+    await client.post(
+        EXP,
+        json=expense_body(cat="চা", grp="other", iso="2026-09-05"),
+        headers=headers,
+    )
+    r = await client.get(f"{EXP}/categories", headers=headers)
+    items = r.json()["items"]
+    assert len(items) == 1
+    assert items[0]["cat"] == "চা"
+    assert items[0]["grp"] == "other"  # most recent wins
+    assert items[0]["last_used"] == "2026-09-05"
+    assert items[0]["use_count"] == 2
+
+
+async def test_categories_dedupe_same_day_ties(client: AsyncClient) -> None:
+    """Same cat on the same iso (created_at second-precision ties) → 1 khata."""
+    headers, _ = await register_user(client, email="cats-ties@test.dev")
+    for _ in range(3):
+        await client.post(
+            EXP,
+            json=expense_body(cat="রিকশা", grp="transport", iso="2026-09-03"),
+            headers=headers,
+        )
+    items = (await client.get(f"{EXP}/categories", headers=headers)).json()["items"]
+    assert len(items) == 1
+    assert items[0]["use_count"] == 3
+
+
+async def test_categories_order_most_used_then_recent(client: AsyncClient) -> None:
+    headers, _ = await register_user(client, email="cats-order@test.dev")
+    # "চা" ×2 (latest 09-04) · "বাস" ×1 (09-05, more recent) · "ভাত" ×3 (09-01).
+    await client.post(EXP, json=expense_body(cat="চা", iso="2026-09-01"), headers=headers)
+    await client.post(EXP, json=expense_body(cat="চা", iso="2026-09-04"), headers=headers)
+    await client.post(
+        EXP, json=expense_body(cat="বাস", grp="transport", iso="2026-09-05"), headers=headers
+    )
+    for _ in range(3):
+        await client.post(EXP, json=expense_body(cat="ভাত", iso="2026-09-01"), headers=headers)
+    items = (await client.get(f"{EXP}/categories", headers=headers)).json()["items"]
+    assert [i["cat"] for i in items] == ["ভাত", "চা", "বাস"]  # count desc, then recency
+    assert all(i["grp"] in ("food", "transport") for i in items)
+
+
+async def test_categories_per_user_scoping(client: AsyncClient) -> None:
+    headers_a, _ = await register_user(client, email="cats-a@test.dev")
+    headers_b, _ = await register_user(client, email="cats-b@test.dev")
+    await client.post(EXP, json=expense_body(cat="শুধু-এর", iso="2026-09-02"), headers=headers_a)
+    r = await client.get(f"{EXP}/categories", headers=headers_b)
+    assert r.json()["items"] == []  # B never sees A's khatas
+    r = await client.get(f"{EXP}/categories", headers=headers_a)
+    assert [i["cat"] for i in r.json()["items"]] == ["শুধু-এর"]

@@ -19,7 +19,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select, tuple_
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_kv_dep
@@ -34,6 +34,8 @@ from app.schemas.expense import (
     ExpenseListOut,
     ExpenseOut,
     ExpenseUpdate,
+    KhataListOut,
+    KhataOut,
 )
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
@@ -150,6 +152,53 @@ async def list_expenses(
     return ExpenseListOut(
         items=[ExpenseOut.model_validate(row) for row in rows],
         next_cursor=next_cursor,
+    )
+
+
+@router.get("/categories", response_model=KhataListOut)
+async def list_khata_categories(
+    db: DbDep, user: CurrentUser
+) -> KhataListOut:
+    """Distinct khatas derived from the caller's expense history (ADR-0019).
+
+    One row per distinct ``cat``: ``grp``/``last_used`` come from the khata's
+    most recent expense (window pass, portable across SQLite/Postgres — no
+    ``DISTINCT ON``), ``use_count`` from a partition count. Ordered
+    most-used → most-recent → cat. A khata set is bounded by the user's own
+    distinct cats, so it is picker-sized and unpaginated.
+    """
+    rn = (
+        func.row_number()
+        .over(
+            partition_by=Expense.cat,
+            order_by=(Expense.iso.desc(), Expense.created_at.desc(), Expense.id.desc()),
+        )
+        .label("rn")
+    )
+    use_count = func.count().over(partition_by=Expense.cat).label("use_count")
+    ranked = (
+        select(
+            Expense.cat.label("cat"),
+            Expense.grp.label("grp"),
+            Expense.iso.label("last_used"),
+            use_count,
+            rn,
+        )
+        .where(Expense.user_id == user.id)
+        .subquery()
+    )
+    stmt = (
+        select(ranked.c.cat, ranked.c.grp, ranked.c.last_used, ranked.c.use_count)
+        .where(ranked.c.rn == 1)
+        .order_by(ranked.c.use_count.desc(), ranked.c.last_used.desc(), ranked.c.cat.asc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return KhataListOut(
+        items=[
+            KhataOut(cat=row.cat, grp=row.grp, use_count=row.use_count, last_used=row.last_used)
+            for row in rows
+        ],
+        next_cursor=None,
     )
 
 

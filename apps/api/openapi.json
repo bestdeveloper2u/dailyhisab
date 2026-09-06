@@ -863,6 +863,75 @@
         "title": "Healthz",
         "type": "object"
       },
+      "KhataListOut": {
+        "description": "Envelope for GET /expenses/categories (ADR-0004 \u00a78; cursor always null).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KhataOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "KhataListOut",
+        "type": "object"
+      },
+      "KhataOut": {
+        "description": "One distinct khata (category) derived from the caller's history.\n\n``grp``/``last_used`` come from the khata's *most recent* expense and are\nprefill hints only \u2014 reports/budgets keep grouping each expense row by its\nown ``grp`` (ADR-0019).",
+        "properties": {
+          "cat": {
+            "title": "Cat",
+            "type": "string"
+          },
+          "grp": {
+            "enum": [
+              "food",
+              "housing",
+              "utility",
+              "transport",
+              "health",
+              "education",
+              "personal",
+              "other"
+            ],
+            "title": "Grp",
+            "type": "string"
+          },
+          "last_used": {
+            "format": "date",
+            "title": "Last Used",
+            "type": "string"
+          },
+          "use_count": {
+            "minimum": 1.0,
+            "title": "Use Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cat",
+          "grp",
+          "use_count",
+          "last_used"
+        ],
+        "title": "KhataOut",
+        "type": "object"
+      },
       "LoginIn": {
         "description": "POST /auth/login body.",
         "properties": {
@@ -2476,6 +2545,33 @@
           }
         ],
         "summary": "Create Expenses Bulk",
+        "tags": [
+          "expenses"
+        ]
+      }
+    },
+    "/api/v1/expenses/categories": {
+      "get": {
+        "description": "Distinct khatas derived from the caller's expense history (ADR-0019).\n\nOne row per distinct ``cat``: ``grp``/``last_used`` come from the khata's\nmost recent expense (window pass, portable across SQLite/Postgres \u2014 no\n``DISTINCT ON``), ``use_count`` from a partition count. Ordered\nmost-used \u2192 most-recent \u2192 cat. A khata set is bounded by the user's own\ndistinct cats, so it is picker-sized and unpaginated.",
+        "operationId": "list_khata_categories_api_v1_expenses_categories_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KhataListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Khata Categories",
         "tags": [
           "expenses"
         ]
