@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.kv import close_kv
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.session import dispose_engine
 from app.routers import (
     auth,
@@ -64,6 +65,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # T19.4 (ADR-0018): nosniff + referrer-policy on every response,
+    # including 404s and error responses.
+    app.add_middleware(SecurityHeadersMiddleware)
     # Versioned surface ...
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
