@@ -160,6 +160,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sessions
+         * @description List the caller's LIVE sessions, newest TTLs included (200).
+         *
+         *     The per-user index is pruned of dead members on read, so the response
+         *     only ever shows sessions that can actually still refresh. ``current`` is
+         *     the ``sid`` claim of the caller's own access token (ADR-0002); ``null``
+         *     when the token carries no ``sid`` claim (current session unknown).
+         */
+        get: operations["list_sessions_api_v1_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Other Sessions
+         * @description Revoke every live session of the caller EXCEPT the current one.
+         *
+         *     Same teardown semantics as ``POST /auth/logout`` per victim session:
+         *     ``sess:<sid>`` + its current ``rt:<hash>`` die together, and the sid is
+         *     removed from the profile's index. Idempotent — with nothing else live it
+         *     answers ``{"revoked": 0}``. 409 when the caller's token has no ``sid``
+         *     claim (nothing is revoked: refusing beats guessing what to keep).
+         */
+        post: operations["revoke_other_sessions_api_v1_auth_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/budgets": {
         parameters: {
             query?: never;
@@ -1202,6 +1253,27 @@ export interface components {
             restored: components["schemas"]["BackupCounts"];
         };
         /**
+         * RevokeOthersOut
+         * @description POST /auth/sessions/revoke-others response.
+         */
+        RevokeOthersOut: {
+            /** Revoked */
+            revoked: number;
+        };
+        /**
+         * SessionItemOut
+         * @description One live session of the caller (GET /auth/sessions item).
+         *
+         *     ``expires_in`` is the remaining KV TTL of ``sess:<id>`` in seconds —
+         *     the same lifetime the refresh token has left.
+         */
+        SessionItemOut: {
+            /** Expires In */
+            expires_in: number;
+            /** Id */
+            id: string;
+        };
+        /**
          * SessionProbeOut
          * @description ``POST /auth/refresh-cookie`` answer when the request carries NO
          *     ``kh_refresh`` cookie at all: there is no cookie session, so the endpoint
@@ -1212,6 +1284,21 @@ export interface components {
         SessionProbeOut: {
             /** Session */
             session: boolean;
+        };
+        /**
+         * SessionsOut
+         * @description GET /auth/sessions response: the caller's live sessions.
+         *
+         *     ``current`` is the session id embedded in the caller's own access token
+         *     (``sid`` claim, ADR-0002). ``null`` means the token carried no ``sid``
+         *     claim, so the current session cannot be pinpointed (revoke-others will
+         *     refuse with 409 in that case).
+         */
+        SessionsOut: {
+            /** Current */
+            current: string | null;
+            /** Items */
+            items: components["schemas"]["SessionItemOut"][];
         };
         /**
          * UserOut
@@ -1451,6 +1538,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsOut"];
+                };
+            };
+        };
+    };
+    revoke_other_sessions_api_v1_auth_sessions_revoke_others_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeOthersOut"];
                 };
             };
         };

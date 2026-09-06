@@ -1,6 +1,6 @@
 {
   "name": "@khoroch/api-client",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "pnpm generate && pnpm typecheck",
     "generate": "openapi-typescript ../../apps/api/openapi.json -o src/schema.gen.d.ts",
     "typecheck": "tsc --noEmit"
   },
