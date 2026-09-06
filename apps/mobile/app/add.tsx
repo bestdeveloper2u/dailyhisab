@@ -40,7 +40,12 @@ import {
   type ExpenseDraft,
 } from "../lib/draft";
 import { usePrefs } from "../lib/prefs";
-import { GROUP_LABELS, PAY_LABELS, STRINGS } from "../lib/strings";
+import {
+  GROUP_LABELS,
+  PAY_LABELS,
+  STRINGS,
+  type MobileStringKey,
+} from "../lib/strings";
 import { theme } from "../lib/theme";
 import { useToast } from "../lib/toast";
 import {
@@ -52,6 +57,20 @@ import {
 
 const GROUPS = Object.keys(GROUP_LABELS) as ExpenseGroup[];
 const PAY_METHODS = Object.keys(PAY_LABELS) as PayMethod[];
+
+/** T23.3 quick bump chips — the prototype's .qchips row under the amount
+ *  input (www/index.html 782-785); bump(n) ADDS n to the parsed amount
+ *  (www/index.html 1718). */
+const BUMP_CHIPS: {
+  n: number;
+  labelKey: MobileStringKey;
+  a11yKey: MobileStringKey;
+}[] = [
+  { n: 10, labelKey: "bump10", a11yKey: "bump10A11y" },
+  { n: 50, labelKey: "bump50", a11yKey: "bump50A11y" },
+  { n: 100, labelKey: "bump100", a11yKey: "bump100A11y" },
+  { n: 500, labelKey: "bump500", a11yKey: "bump500A11y" },
+];
 
 /** ^\d+([.]\\d{1,2})?$ — mirrors the API's numeric(12,2) domain. */
 const AMOUNT_RE = /^\d+([.]\d{1,2})?$/;
@@ -372,6 +391,19 @@ export default function AddExpense() {
     setVoiceError(null);
   }
 
+  // T23.3 quick bump chips — prototype bump(n) parity: the new amount is
+  // (parseInt(current, 10) || 0) + n, so an empty field starts from 0.
+  // Normalization reuses the submit path's exact ৳-strip expression (the
+  // `normalizedAmount` line below), and the write-back goes through
+  // setAmount + queueDraftSave so the T19.3 draft autosave persists and
+  // submit validation sees a clean ASCII value.
+  function bumpAmount(n: number) {
+    const current = parseInt(amount.trim().replace(/^৳\s*/, ""), 10) || 0;
+    const next = String(current + n);
+    setAmount(next);
+    queueDraftSave({ amount: next });
+  }
+
   async function handleSubmit() {
     const token = auth.accessToken;
     if (!canSubmit || !token) return;
@@ -434,6 +466,23 @@ export default function AddExpense() {
             keyboardType="decimal-pad"
             editable={!pending}
           />
+
+          {/* T23.3 quick bump chips: +১০/+৫০/+১০০/+৫০০ directly under the
+              amount input — prototype .qchips row parity; each tap ADDS to
+              the parsed amount (bumpAmount). */}
+          <View style={styles.bumpRow}>
+            {BUMP_CHIPS.map(({ n, labelKey, a11yKey }) => (
+              <Chip
+                key={labelKey}
+                label={t(labelKey)}
+                selected={false}
+                disabled={pending}
+                onPress={() => bumpAmount(n)}
+                style={styles.bumpChip}
+                accessibilityLabel={t(a11yKey)}
+              />
+            ))}
+          </View>
 
           {/* Khata recents (T20.4-mob): top-8 prefill chips, hidden until the
               categories fetch returns rows. Tap fills cat AND grp. */}
@@ -708,6 +757,7 @@ function Chip({
   disabled,
   onPress,
   style,
+  accessibilityLabel,
 }: {
   label: string;
   selected: boolean;
@@ -715,6 +765,8 @@ function Chip({
   onPress: () => void;
   /** Optional extra container style (e.g. recents-chip maxWidth). */
   style?: StyleProp<ViewStyle>;
+  /** Optional screen-reader label (T23.3 bump chips — "+১০ টাকা যোগ করুন"). */
+  accessibilityLabel?: string;
 }) {
   return (
     <Pressable
@@ -728,6 +780,7 @@ function Chip({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      accessibilityLabel={accessibilityLabel}
     >
       {/* numberOfLines=1 keeps long khata names (T20.4 recents) from wrapping
           or overflowing the chip; short labels are unaffected. */}
@@ -808,6 +861,20 @@ const styles = StyleSheet.create({
   chipLabelSelected: {
     color: theme.colors.onAccent,
     fontWeight: "600",
+  },
+  // --- Amount quick-bump chips (T23.3 — prototype .qchips parity) -----------
+  bumpRow: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+  },
+  /** flex:1 keeps all four chips on one row at 360 dp; minHeight 44 meets the
+      touch-target floor. Same tokens as the আজ/গতকাল chips (styles.chip*). */
+  bumpChip: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.sm,
   },
   // --- Khata recents (T20.4-mob) -------------------------------------------
   recentsWrap: {

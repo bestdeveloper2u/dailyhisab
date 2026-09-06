@@ -260,6 +260,16 @@ export const STRINGS = {
     dayYesterday: "গতকাল",
     dateHint: "ভুলে যাওয়া খরচ? ক্যালেন্ডার থেকে আগের যেকোনো তারিখ বেছে নিন",
     recentsLabel: "সাম্প্রতিক খাত",
+
+    // Amount quick-bump chips (T23.3 — prototype .qchips/bump parity)
+    bump10: "+১০",
+    bump50: "+৫০",
+    bump100: "+১০০",
+    bump500: "+৫০০",
+    bump10A11y: "+১০ টাকা যোগ করুন",
+    bump50A11y: "+৫০ টাকা যোগ করুন",
+    bump100A11y: "+১০০ টাকা যোগ করুন",
+    bump500A11y: "+৫০০ টাকা যোগ করুন",
   },
   en: {
     account: "Account",
@@ -516,6 +526,16 @@ export const STRINGS = {
     dayYesterday: "Yesterday",
     dateHint: "Forgot a cost? Pick any earlier date from the calendar",
     recentsLabel: "Recent khatas",
+
+    // Amount quick-bump chips (T23.3 — prototype .qchips/bump parity)
+    bump10: "+10",
+    bump50: "+50",
+    bump100: "+100",
+    bump500: "+500",
+    bump10A11y: "add 10 taka",
+    bump50A11y: "add 50 taka",
+    bump100A11y: "add 100 taka",
+    bump500A11y: "add 500 taka",
   },
 } as const;
 
