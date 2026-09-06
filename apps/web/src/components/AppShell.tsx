@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t, type Lang } from "@khoroch/core";
 import { useLangStore } from "../store/lang";
 import { w } from "../lib/web-i18n";
@@ -11,6 +11,8 @@ import {
   IconBarChart,
   IconCalendar,
   IconHome,
+  IconMic,
+  IconPencil,
   IconPlus,
   IconReceipt,
   IconRepeat,
@@ -65,6 +67,46 @@ export function AppShell() {
     }
     mainRef.current?.focus({ preventScroll: true });
   }, [pathname]);
+
+  /*
+   * T21.4 — prototype fabcol scroll-hide (@1781-1783): scrolling DOWN more
+   * than 6px while past the 90px app bar hides the FAB column; ANY scroll-up
+   * beyond the 6px hysteresis shows it again. The hysteresis stops touch
+   * jitter from flapping the FABs. The real scroll container here is the
+   * window (main has no overflow of its own), unlike the prototype's
+   * scrollable <main> — so we track window.scrollY. The listener is passive:
+   * it must never block the scroll thread.
+   */
+  const [fabHidden, setFabHidden] = useState(false);
+  const lastScrollY = useRef(0);
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      const last = lastScrollY.current;
+      if (y > last + 6 && y > 90) setFabHidden(true);
+      else if (y < last - 6) setFabHidden(false);
+      lastScrollY.current = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /*
+   * T21.2 — context-aware FAB targets (prototype fabMode @1374 / addFab
+   * @1772-1780): on /debts the pencil focuses the debt-party input, on
+   * /budget the monthly-limit input, elsewhere it opens the add-expense
+   * form; the mic opens the matching voice overlay.
+   */
+  const pencilTarget = pathname.startsWith("/debts")
+    ? "/debts?focus=party"
+    : pathname.startsWith("/budget")
+      ? "/budget?focus=total"
+      : "/expenses?add=1";
+  const micTarget = pathname.startsWith("/debts")
+    ? "/debts?voice=1"
+    : pathname.startsWith("/budget")
+      ? "/budget?voice=1"
+      : "/expenses?voice=1";
 
   return (
     <div className={`min-h-dvh bg-ivory text-ink ${lang === "bn" ? "font-bn" : "font-en"}`}>
@@ -131,14 +173,42 @@ export function AppShell() {
         </main>
       </div>
 
-      <button
-        type="button"
-        aria-label={t(lang, "addExpense")}
-        onClick={() => navigate("/expenses?voice=1")}
-        className="fab-pos fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-emerald text-accent-ink shadow-card lg:right-8"
+      {/* Prototype fabcol: small pencil FAB (নিজে লিখুন) above the big mic FAB —
+          voice stays visually separate, exactly like the frozen prototype.
+          Scroll-hide (.fadhide parity): slides out of the way while reading
+          down, springs back on scroll-up; reduced motion keeps the toggle but
+          drops the transition via the app-wide CSS kill-switch. `inert` keeps
+          the hidden buttons out of the tab order. */}
+      <div
+        inert={fabHidden}
+        aria-hidden={fabHidden}
+        className={`fab-pos fixed right-4 z-40 flex flex-col items-center gap-2.5 transition-[transform,opacity] duration-300 ease-out lg:right-8 ${
+          fabHidden ? "pointer-events-none translate-y-[160%] opacity-0" : "translate-y-0 opacity-100"
+        }`}
       >
-        <IconPlus className="h-6 w-6" />
-      </button>
+        <button
+          type="button"
+          aria-label={w(lang, "qaManual")}
+          title={w(lang, "qaManual")}
+          onClick={() => navigate(pencilTarget)}
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface text-ink shadow-card transition-[filter] hover:bg-surface-2"
+        >
+          <IconPencil className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          aria-label={w(lang, "voiceTitle")}
+          title={w(lang, "voiceTitle")}
+          onClick={() =>
+            // Prototype fabMode(): the mic is context-aware — debts ledger,
+            // budget screen, or expense-voice everywhere else.
+            navigate(micTarget)
+          }
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald text-accent-ink shadow-card transition-transform active:scale-95"
+        >
+          <IconMic className="h-6 w-6" />
+        </button>
+      </div>
 
       <nav
         aria-label="Tabs"

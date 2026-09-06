@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
 import type { Debt } from "@khoroch/api-client";
 import { useDebtMutations, useDebtsInfinite } from "../lib/queries";
@@ -9,7 +10,8 @@ import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 import { Modal } from "../components/Modal";
 import { toast } from "../lib/toast";
-import { IconTrash } from "../components/icons";
+import { IconMic, IconTrash } from "../components/icons";
+import { VoiceOverlay } from "../components/VoiceOverlay";
 
 type StatusTab = "open" | "settled" | "all";
 const STATUS_TABS: StatusTab[] = ["open", "settled", "all"];
@@ -228,6 +230,25 @@ export function Debts() {
   const { create } = useDebtMutations();
   const [status, setStatus] = useState<StatusTab>("open");
   const query = useDebtsInfinite(status);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Shell mic-FAB deep-links here with ?voice=1 (prototype fabMode: the mic
+  // becomes debt-mode on this screen); the pencil FAB focuses the party
+  // input with ?focus=party (prototype addFab @1772-1776).
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams.get("voice") === "1") {
+      setVoiceOpen(true);
+      setSearchParams({}, { replace: true });
+    } else if (searchParams.get("focus") === "party") {
+      const el = document.getElementById("debtParty");
+      if (el) {
+        el.scrollIntoView({ block: "center" });
+        el.focus({ preventScroll: true });
+      }
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // New-entry form state (prototype: party, dir, amount, date, note).
   const [party, setParty] = useState("");
@@ -385,7 +406,17 @@ export function Debts() {
         </div>
       )}
 
-      <h2 className="mt-6 px-1 text-[13px] font-bold text-muted">{w(lang, "dNew")}</h2>
+      <h2 className="mt-6 flex flex-wrap items-center justify-between gap-2 px-1">
+        <span className="text-[13px] font-bold text-muted">{w(lang, "dNew")}</span>
+        <button
+          type="button"
+          onClick={() => setVoiceOpen(true)}
+          className="flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-sm font-semibold text-ink hover:bg-surface-2"
+        >
+          <IconMic className="h-4 w-4" />
+          {w(lang, "voiceBtn")}
+        </button>
+      </h2>
       <form
         className="mt-2 max-w-[520px] rounded-card border border-line bg-surface p-5 shadow-card"
         onSubmit={(e) => {
@@ -484,6 +515,14 @@ export function Debts() {
       </form>
 
       {payTarget && <PayModal debt={payTarget} onClose={() => setPayTarget(null)} />}
+
+      {/* Context-aware voice (prototype VOICE_CTX.debt) — parses on-device. */}
+      <VoiceOverlay
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        mode="debt"
+        parties={parties}
+      />
     </section>
   );
 }

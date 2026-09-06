@@ -1,10 +1,16 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import { toBnDigits } from "@khoroch/core";
+import { moneyToNumber, toBnDigits } from "@khoroch/core";
 import type { ParsedExpense } from "@khoroch/api-client";
-import { useExpenseMutations, useVoiceParse } from "../lib/queries";
-import { groupName, payName, todayIso } from "../lib/catalog";
+import {
+  useExpenseMutations,
+  useDebtMutations,
+  useBudgetMutation,
+  useVoiceParse,
+} from "../lib/queries";
+import { groupName, monthLabel, normalizeAmount, payName, todayIso, ymOfIso } from "../lib/catalog";
 import { w } from "../lib/web-i18n";
 import { fmtTaka } from "../lib/money";
+import { parseBudgetAmount, parseDebtText, type ParsedDebt } from "../lib/parseDebt";
 import { useLangStore } from "../store/lang";
 import { Modal } from "./Modal";
 import { toast } from "../lib/toast";
@@ -83,13 +89,40 @@ function getRecognition(): RecognitionLike | null {
  * type a transcript → POST /voice/parse → review the parsed candidates →
  * POST /expenses/bulk saves them in one flush (ADR-0004 §8 money strings).
  */
-export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+export type VoiceOverlayMode = "expense" | "debt" | "budget";
+
+/** Mode-aware copy for the overlay head + hint line (prototype VOICE_CTX). */
+const MODE_COPY = {
+  expense: { title: "voiceTitle", hint: "voiceHint" },
+  debt: { title: "voiceDebtTitle", hint: "voiceDebtHint" },
+  budget: { title: "voiceBudgetTitle", hint: "voiceBudgetHint" },
+} as const satisfies Record<VoiceOverlayMode, { title: "voiceTitle" | "voiceDebtTitle" | "voiceBudgetTitle"; hint: "voiceHint" | "voiceDebtHint" | "voiceBudgetHint" }>;
+
+export function VoiceOverlay({
+  open,
+  onClose,
+  mode = "expense",
+  parties = [],
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Context-aware overlay (prototype fabMode): expense or debt ledger. */
+  mode?: VoiceOverlayMode;
+  /** Known party names for the debt-mode datalist autocomplete. */
+  parties?: string[];
+}) {
   const lang = useLangStore((s) => s.lang);
   const parse = useVoiceParse();
   const { bulkCreate } = useExpenseMutations();
+  const { create: createDebt } = useDebtMutations();
+  const { put: putBudget } = useBudgetMutation();
 
   const [text, setText] = useState("");
   const [items, setItems] = useState<ParsedExpense[] | null>(null);
+  // Debt mode: single editable review row (prototype vDebtName/Dir/Amt/Note).
+  const [debtRow, setDebtRow] = useState<ParsedDebt | null>(null);
+  // Budget mode: parsed monthly limit, null until something was understood.
+  const [budgetAmt, setBudgetAmt] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
   const [listening, setListening] = useState(false);
   const [savedCount, setSavedCount] = useState<number | null>(null);
@@ -112,7 +145,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   const silenceTimerRef = useRef<number | null>(null);
 
   const micSupported = useMemo(() => getRecognition() !== null, []);
-  const pending = parse.isPending || bulkCreate.isPending;
+  const pending = parse.isPending || bulkCreate.isPending || putBudget.isPending;
 
   function setTextBoth(v: string) {
     textRef.current = v;
@@ -140,6 +173,8 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
   function reset() {
     setTextBoth("");
     setItems(null);
+    setDebtRow(null);
+    setBudgetAmt(null);
     setConfidence(null);
     setSavedCount(null);
     setError(null);
@@ -275,6 +310,29 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     if (!transcript || pending) return;
     busyRef.current = true;
     try {
+      // Debt mode parses on-device (zero-cost regex) and always shows the
+      // review card first — wrong money direction is worse than one extra tap.
+      if (mode === "debt") {
+        const parsed = parseDebtText(transcript);
+        if (!parsed) {
+          setItems([]);
+          return;
+        }
+        setDebtRow(parsed);
+        return;
+      }
+      // Budget mode is on-device too (prototype VOICE_CTX.budget): the first
+      // number in the sentence is the monthly limit. No number → nothing to
+      // review, and the transcript stays editable for a retry.
+      if (mode === "budget") {
+        const amt = parseBudgetAmount(transcript);
+        if (amt === null) {
+          setItems([]);
+          return;
+        }
+        setBudgetAmt(amt);
+        return;
+      }
       let res;
       try {
         res = await parse.mutateAsync(transcript);
@@ -372,11 +430,83 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     }
   }
 
+  /** Debt review card → POST /debts → toast + auto-close (prototype vpSave). */
+  async function saveDebtRow() {
+    if (busyRef.current || !debtRow) return;
+    if (!debtRow.party.trim() || !(Number(debtRow.amt) > 0)) {
+      setError(w(lang, "voiceDebtNeed"));
+      return;
+    }
+    busyRef.current = true;
+    try {
+      let res;
+      try {
+        res = await createDebt.mutateAsync({
+          party: debtRow.party.trim(),
+          dir: debtRow.dir,
+          amt: Number(debtRow.amt).toFixed(2),
+          note: debtRow.note.trim() || undefined,
+          iso: todayIso(),
+        });
+      } catch {
+        setError(w(lang, "voiceNetErr"));
+        return;
+      }
+      if (!res.ok) {
+        setError(res.detail || w(lang, "errFallback"));
+        return;
+      }
+      setDebtRow(null);
+      setSavedCount(1);
+      setTextBoth("");
+      toast(w(lang, "voiceDebtSaved"));
+      window.setTimeout(() => handleClose(), 1600);
+    } finally {
+      busyRef.current = false;
+    }
+  }
+
+  /**
+   * Budget review card → PUT /budgets {total} for the current month →
+   * toast + auto-close (prototype VOICE_CTX.budget parity).
+   */
+  async function saveBudgetRow() {
+    if (busyRef.current || budgetAmt === null) return;
+    const normalized = normalizeAmount(budgetAmt);
+    if (!normalized || moneyToNumber(normalized) <= 0) {
+      setError(w(lang, "errAmt"));
+      return;
+    }
+    busyRef.current = true;
+    try {
+      let res;
+      try {
+        // PUT /budgets upserts the current month server-side (ym defaults to
+        // todayIso's month); the mutation invalidates the budgets cache.
+        res = await putBudget.mutateAsync({ total: normalized });
+      } catch {
+        setError(w(lang, "voiceNetErr"));
+        return;
+      }
+      if (!res.ok) {
+        setError(res.detail || w(lang, "errFallback"));
+        return;
+      }
+      setBudgetAmt(null);
+      setSavedCount(1);
+      setTextBoth("");
+      toast(w(lang, "voiceBudgetSaved"));
+      window.setTimeout(() => handleClose(), 1600);
+    } finally {
+      busyRef.current = false;
+    }
+  }
+
   return (
     <Modal open={open} onClose={handleClose} label={w(lang, "voiceTitle")}>
       <div className="flex flex-col gap-4 p-5" aria-busy={pending}>
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold">{w(lang, "voiceTitle")}</h2>
+          <h2 className="text-base font-bold">{w(lang, MODE_COPY[mode].title)}</h2>
           <button
             type="button"
             onClick={handleClose}
@@ -386,7 +516,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
             ✕
           </button>
         </div>
-        <p className="text-[13px] text-muted">{w(lang, "voiceHint")}</p>
+        <p className="text-[13px] text-muted">{w(lang, MODE_COPY[mode].hint)}</p>
 
         {error && (
           <p
@@ -428,7 +558,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
 
         <div className="flex flex-col gap-1.5">
           <label className="sr-only" htmlFor="voice-text">
-            {w(lang, "voiceHint")}
+            {w(lang, MODE_COPY[mode].hint)}
           </label>
           <textarea
             id="voice-text"
@@ -457,7 +587,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
           )}
         </div>
 
-        {items === null || items.length === 0 ? (!listening && text.trim() !== "" && (
+        {items === null || items.length === 0 ? (!listening && !debtRow && budgetAmt === null && text.trim() !== "" && (
           <button
             type="button"
             onClick={() => void runFlow()}
@@ -467,6 +597,102 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
             {parse.isPending ? w(lang, "voiceParsing") : w(lang, "voiceAddBtn")}
           </button>
         )) : null}
+
+        {mode === "debt" && debtRow && (
+          <div className="flex flex-col gap-2.5 rounded-card border border-line bg-surface p-3.5">
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="font-bold">{w(lang, "dNew")}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <label className="flex flex-col gap-1 text-[12px] font-semibold text-muted">
+                {w(lang, "dParty")}
+                <input
+                  type="text"
+                  value={debtRow.party}
+                  maxLength={120}
+                  list="voiceDebtPartyList"
+                  onChange={(e) => setDebtRow({ ...debtRow, party: e.target.value })}
+                  className="rounded-control border border-line bg-ivory px-2.5 py-2 text-sm font-normal text-ink focus:border-emerald focus:outline-none"
+                />
+                <datalist id="voiceDebtPartyList">
+                  {parties.map((p) => (
+                    <option key={p} value={p} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="flex flex-col gap-1 text-[12px] font-semibold text-muted">
+                {w(lang, "dType")}
+                <select
+                  value={debtRow.dir}
+                  onChange={(e) =>
+                    setDebtRow({ ...debtRow, dir: e.target.value as "lend" | "borrow" })
+                  }
+                  className="rounded-control border border-line bg-ivory px-2.5 py-2 text-sm font-normal text-ink focus:border-emerald focus:outline-none"
+                >
+                  <option value="lend">{w(lang, "dLend")}</option>
+                  <option value="borrow">{w(lang, "dBorrow")}</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-[12px] font-semibold text-muted">
+                {w(lang, "amtLabel")}
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={debtRow.amt}
+                  onChange={(e) => setDebtRow({ ...debtRow, amt: e.target.value })}
+                  className="rounded-control border border-line bg-ivory px-2.5 py-2 text-sm font-bold tabular-nums text-ink focus:border-emerald focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[12px] font-semibold text-muted">
+                {w(lang, "dNote")}
+                <input
+                  type="text"
+                  value={debtRow.note}
+                  maxLength={200}
+                  placeholder={w(lang, "dOpt")}
+                  onChange={(e) => setDebtRow({ ...debtRow, note: e.target.value })}
+                  className="rounded-control border border-line bg-ivory px-2.5 py-2 text-sm font-normal text-ink placeholder:text-muted/70 focus:border-emerald focus:outline-none"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => void saveDebtRow()}
+              disabled={createDebt.isPending}
+              className="h-11 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {createDebt.isPending ? w(lang, "saving") : w(lang, "save")}
+            </button>
+          </div>
+        )}
+
+        {mode === "budget" && budgetAmt !== null && (
+          <div className="flex flex-col gap-2.5 rounded-card border border-line bg-surface p-3.5">
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="font-bold">{w(lang, "budMonthly")}</span>
+              <span className="text-muted">{monthLabel(ymOfIso(todayIso()), lang)}</span>
+            </div>
+            <label className="flex flex-col gap-1 text-[12px] font-semibold text-muted">
+              {w(lang, "amtLabel")}
+              <input
+                id="voiceBudgetAmt"
+                type="text"
+                inputMode="decimal"
+                value={budgetAmt}
+                onChange={(e) => setBudgetAmt(e.target.value)}
+                className="rounded-control border border-line bg-ivory px-2.5 py-2 text-lg font-bold tabular-nums text-ink focus:border-emerald focus:outline-none"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void saveBudgetRow()}
+              disabled={putBudget.isPending}
+              className="h-11 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {putBudget.isPending ? w(lang, "saving") : w(lang, "save")}
+            </button>
+          </div>
+        )}
 
         {items !== null && items.length === 0 && (
           <p className="text-sm text-muted" role="status">
