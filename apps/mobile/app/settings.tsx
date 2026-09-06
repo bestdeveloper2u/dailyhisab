@@ -1,17 +1,29 @@
-import { BRAND_NAME } from "@khoroch/core";
+import { BRAND_NAME, toBnDigits } from "@khoroch/core";
 import Constants from "expo-constants";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { Redirect, router } from "expo-router";
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { exportBackup, parseBackupEnvelope, restoreBackup } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { describeApiError } from "../lib/errors";
 import { usePrefs } from "../lib/prefs";
 import type { Lang } from "../lib/strings";
 import type { ThemeColors, ThemeMode } from "../lib/theme";
 import { theme } from "../lib/theme";
+import { useToast } from "../lib/toast";
 
 /** App version from the Expo config (app.json), with a dev fallback. */
 const APP_VERSION = Constants.expoConfig?.version ?? "0.9.0-dev";
+
+/** daily-hisab-backup-YYYYMMDD.json from the device's LOCAL date (T21.3). */
+function backupFilename(now: Date): string {
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `daily-hisab-backup-${now.getFullYear()}${mm}${dd}.json`;
+}
 
 interface SegmentOption<T extends string> {
   key: T;
@@ -95,13 +107,23 @@ function Row({
 /**
  * Settings (T11.3): read-only profile from the auth session (hydrated via
  * GET /auth/me in AuthProvider), language + theme segments, static voice
- * chip, app version, and logout. Fully theme-aware — the whole screen
- * restyles live when the theme segment flips, demonstrating both palettes.
+ * chip, app version, and logout. T21.3 adds the ডেটা নিরাপত্তা card —
+ * backup.json download (share sheet) + paste-JSON restore with a two-step
+ * confirm. Fully theme-aware — the whole screen restyles live when the
+ * theme segment flips, demonstrating both palettes.
  */
 export default function Settings() {
   const auth = useAuth();
   const { mode, lang, colors, setMode, setLang, t } = usePrefs();
+  const toast = useToast();
   const [pending, setPending] = useState(false);
+
+  // Data-safety card (T21.3): backup download + paste-JSON restore.
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   if (!auth.user) {
     return <Redirect href="/login" />;
@@ -115,6 +137,90 @@ export default function Settings() {
       .logout()
       .catch(() => undefined)
       .finally(() => router.replace("/login"));
+  };
+
+  /**
+   * ব্যাকআপ ডাউনলোড (T21.3): GET /export/backup.json → write the envelope
+   * to a cache file (exact JSON the server produced — decimal strings stay
+   * strings) → OS share sheet. Same terminal-state toast pattern as the
+   * list screen's CSV export; must never crash.
+   */
+  const onBackupDownload = async () => {
+    const token = auth.accessToken;
+    if (!token || backupBusy) return;
+    setBackupBusy(true);
+    setRestoreError(null);
+    try {
+      const envelope = await exportBackup(token);
+      const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (dir === null) throw new Error("no-cache-directory");
+      const dest = `${dir}${backupFilename(new Date())}`;
+      await FileSystem.writeAsStringAsync(
+        dest,
+        `${JSON.stringify(envelope, null, 2)}\n`,
+        { encoding: FileSystem.EncodingType.UTF8 },
+      );
+      const available = await Sharing.isAvailableAsync();
+      if (!available) throw new Error("sharing-unavailable");
+      await Sharing.shareAsync(dest, {
+        mimeType: "application/json",
+        dialogTitle: t("backupDl"),
+        UTI: "public.json",
+      });
+      toast(t("toastBackupDone"));
+    } catch {
+      toast(t("toastBackupFailed"), "error");
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  /** First tap of the two-step restore: arm the destructive flow. */
+  const armRestore = () => {
+    setRestoreOpen(true);
+    setRestoreError(null);
+  };
+
+  /** Collapse the restore panel and drop any pasted text. */
+  const cancelRestore = () => {
+    if (restoreBusy) return;
+    setRestoreOpen(false);
+    setPasteText("");
+    setRestoreError(null);
+  };
+
+  /**
+   * Second tap of the two-step restore (mirrors the web Settings UX:
+   * arm → paste → explicit confirm). Validates the pasted JSON looks like
+   * a BackupEnvelope BEFORE the destructive call; parse/network failures
+   * surface as a themed inline error — never a crash.
+   */
+  const onRestoreConfirm = async () => {
+    const token = auth.accessToken;
+    if (!token || restoreBusy) return;
+    const envelope = parseBackupEnvelope(pasteText);
+    if (envelope === null) {
+      setRestoreError(t("restoreBadJson"));
+      return;
+    }
+    setRestoreBusy(true);
+    setRestoreError(null);
+    try {
+      const res = await restoreBackup(token, envelope);
+      const count = (n: number) =>
+        lang === "bn" ? toBnDigits(String(n)) : String(n);
+      toast(
+        `${count(res.restored.expenses)} ${t("restoreCountExpenses")}, ${count(
+          res.restored.debts,
+        )} ${t("restoreCountDebts")} ${t("toastRestoreDone")}`,
+      );
+      setRestoreOpen(false);
+      setPasteText("");
+    } catch (err) {
+      setRestoreError(describeApiError(err));
+    } finally {
+      setRestoreBusy(false);
+    }
   };
 
   return (
@@ -188,6 +294,174 @@ export default function Settings() {
               </Text>
             </View>
           </Row>
+        </View>
+
+        {/* ডেটা নিরাপত্তা (T21.3 — ADR-0012): real backup download + restore,
+            mobile parity of the web Settings' DataSafety card. */}
+        <Text style={[styles.sectionLabel, { color: colors.muted }]}>
+          {t("dataSafety")}
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          {/* ব্যাকআপ ডাউনলোড — GET /api/v1/export/backup.json */}
+          <View style={styles.dsRow}>
+            <View style={styles.dsRowText}>
+              <Text
+                style={[styles.dsTitle, { color: colors.ink }]}
+                numberOfLines={1}
+              >
+                {t("backupDl")}
+              </Text>
+              <Text
+                style={[styles.dsSub, { color: colors.muted }]}
+                numberOfLines={2}
+              >
+                {t("backupSub")}
+              </Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.dsButton,
+                { backgroundColor: colors.surface2 },
+                pressed && styles.dsPressed,
+                backupBusy && styles.dsDisabled,
+              ]}
+              onPress={() => void onBackupDownload()}
+              disabled={backupBusy}
+              accessibilityRole="button"
+              accessibilityLabel={t("backupDl")}
+            >
+              <Text
+                style={[styles.dsButtonLabel, { color: colors.ink }]}
+                numberOfLines={1}
+              >
+                {backupBusy ? t("backupStarted") : t("backupDl")}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View
+            style={[styles.dsDivider, { backgroundColor: colors.line }]}
+          />
+
+          {/* রিস্টোর — POST /api/v1/import/restore (DESTRUCTIVE: replaces
+              the whole ledger). Two-step confirm: first tap arms (opens the
+              paste panel with the warning), the danger button confirms —
+              the web's arm → confirm UX with a paste box instead of a file
+              picker (no new native deps). */}
+          <View style={styles.dsRow}>
+            <View style={styles.dsRowText}>
+              <Text
+                style={[styles.dsTitle, { color: colors.ink }]}
+                numberOfLines={1}
+              >
+                {t("restoreTitle")}
+              </Text>
+              <Text
+                style={[styles.dsSub, { color: colors.muted }]}
+                numberOfLines={2}
+              >
+                {t("restoreSub")}
+              </Text>
+            </View>
+            {!restoreOpen && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.dsButton,
+                  { backgroundColor: colors.surface2 },
+                  pressed && styles.dsPressed,
+                ]}
+                onPress={armRestore}
+                accessibilityRole="button"
+                accessibilityLabel={t("restore")}
+              >
+                <Text
+                  style={[styles.dsButtonLabel, { color: colors.ink }]}
+                  numberOfLines={1}
+                >
+                  {t("restore")}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+
+          {restoreOpen && (
+            <View style={styles.dsPanel}>
+              <Text
+                style={[styles.dsWarn, { color: colors.warning }]}
+                numberOfLines={3}
+              >
+                {t("restoreWarn")}
+              </Text>
+              <TextInput
+                style={[
+                  styles.dsPaste,
+                  {
+                    backgroundColor: colors.surface2,
+                    borderColor: colors.line,
+                    color: colors.ink,
+                  },
+                ]}
+                placeholder={t("pastePlaceholder")}
+                placeholderTextColor={colors.muted}
+                value={pasteText}
+                onChangeText={setPasteText}
+                multiline
+                textAlignVertical="top"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!restoreBusy}
+                accessibilityLabel={t("pastePlaceholder")}
+              />
+              {restoreError !== null && (
+                <Text
+                  style={[styles.dsError, { color: colors.danger }]}
+                  numberOfLines={2}
+                  accessibilityRole="alert"
+                >
+                  {restoreError}
+                </Text>
+              )}
+              <View style={styles.dsActions}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.dsConfirm,
+                    { backgroundColor: colors.danger },
+                    pressed && styles.dsPressed,
+                    restoreBusy && styles.dsDisabled,
+                  ]}
+                  onPress={() => void onRestoreConfirm()}
+                  disabled={restoreBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("restoreGo")}
+                >
+                  <Text
+                    style={[styles.dsConfirmLabel, { color: colors.ivory }]}
+                    numberOfLines={1}
+                  >
+                    {restoreBusy ? t("restoring") : t("restoreGo")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.dsCancel,
+                    pressed && styles.dsPressed,
+                    restoreBusy && styles.dsDisabled,
+                  ]}
+                  onPress={cancelRestore}
+                  disabled={restoreBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("cancel")}
+                >
+                  <Text
+                    style={[styles.dsCancelLabel, { color: colors.muted }]}
+                    numberOfLines={1}
+                  >
+                    {t("cancel")}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
 
         <Pressable
@@ -280,6 +554,92 @@ const styles = StyleSheet.create({
   chipLabel: {
     fontSize: 12,
     fontWeight: "500",
+  },
+  // Data-safety card (T21.3).
+  dsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+  },
+  dsRowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  dsTitle: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  dsSub: {
+    fontSize: 12,
+  },
+  dsButton: {
+    flexShrink: 0,
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs + 2,
+  },
+  dsButtonLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  dsDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: theme.spacing.sm,
+  },
+  dsPanel: {
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+  },
+  dsWarn: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "500",
+  },
+  dsPaste: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    fontSize: 13,
+    minHeight: 110,
+    textAlignVertical: "top",
+  },
+  dsError: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  dsActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+  },
+  dsConfirm: {
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  dsConfirmLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  dsCancel: {
+    borderRadius: theme.radius.control,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+  },
+  dsCancelLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  dsPressed: {
+    opacity: 0.7,
+  },
+  dsDisabled: {
+    opacity: 0.5,
   },
   logoutButton: {
     alignSelf: "stretch",

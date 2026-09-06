@@ -203,6 +203,25 @@ export const STRINGS = {
     version: "ভার্সন",
     logout: "লগ আউট",
 
+    // Settings — data safety (T21.3 — ADR-0012 backup/restore, web Settings parity)
+    dataSafety: "ডেটা নিরাপত্তা",
+    backupDl: "ব্যাকআপ ডাউনলোড",
+    backupSub: "সব খরচ, ধার-দেনা ও বাজেট — একটি JSON ফাইলে",
+    backupStarted: "তৈরি হচ্ছে…",
+    toastBackupDone: "ব্যাকআপ ডাউনলোড হয়েছে ✓",
+    toastBackupFailed: "ব্যাকআপ নামানো যায়নি",
+    restoreTitle: "ব্যাকআপ থেকে ফিরিয়ে আনুন",
+    restoreSub: "ব্যাকআপের JSON পেস্ট করে বর্তমান সব ডেটা বদলে দিন",
+    restore: "রিস্টোর",
+    restoreGo: "রিস্টোর করুন",
+    restoreWarn: "ফিরিয়ে আনলে বর্তমান খরচ, ধার-দেনা ও বাজেট মুছে ব্যাকআপের ডেটা বসবে।",
+    pastePlaceholder: "এখানে ব্যাকআপের JSON পেস্ট করুন…",
+    restoring: "ফিরিয়ে আনা হচ্ছে…",
+    restoreBadJson: "এটি Daily Hisab ব্যাকআপের JSON মনে হচ্ছে না — আবার দেখুন।",
+    restoreCountExpenses: "খরচ",
+    restoreCountDebts: "ধার",
+    toastRestoreDone: "পুনরুদ্ধার হয়েছে ✓",
+
     // Voice entry (T15.2 — prototype addscreen mic/overlay parity)
     addSub: "ম্যানুয়ালি লিখুন — অথবা নিচের মাইকে চেপে বলুন",
     voiceUnavailable: "ভয়েস এই বিল্ডে নেই — ডেভেলপমেন্ট বিল্ড প্রয়োজন",
@@ -434,6 +453,25 @@ export const STRINGS = {
     voiceLangValue: "বাংলা (bn-BD)",
     version: "Version",
     logout: "Log out",
+
+    // Settings — data safety (T21.3 — ADR-0012 backup/restore, web Settings parity)
+    dataSafety: "Data safety",
+    backupDl: "Download backup",
+    backupSub: "All expenses, debts and budgets in one JSON file",
+    backupStarted: "Preparing…",
+    toastBackupDone: "Backup downloaded ✓",
+    toastBackupFailed: "Backup download failed",
+    restoreTitle: "Restore from a backup",
+    restoreSub: "Paste a backup's JSON to replace all current data",
+    restore: "Restore",
+    restoreGo: "Restore now",
+    restoreWarn: "Restoring deletes your current expenses, debts and budgets and inserts the backup.",
+    pastePlaceholder: "Paste the backup JSON here…",
+    restoring: "Restoring…",
+    restoreBadJson: "This doesn't look like a Daily Hisab backup JSON — check it and try again.",
+    restoreCountExpenses: "expenses",
+    restoreCountDebts: "debts",
+    toastRestoreDone: "restored ✓",
 
     // Voice entry (T15.2 — prototype addscreen mic/overlay parity)
     addSub: "Type it in — or press the mic below and speak",

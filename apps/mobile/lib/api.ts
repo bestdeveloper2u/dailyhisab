@@ -587,6 +587,104 @@ export function exportExpensesCsvUrl(params: ExportCsvParams = {}): string {
   return `${API_BASE}/api/v1/export/expenses.csv${suffix}`;
 }
 
+// --- Data safety: backup.json export + restore (T21.3, ADR-0012) ---------------
+
+/** One budgets row inside a BackupEnvelope (BackupBudgetRow). */
+export interface BackupBudgetRow {
+  /** "YYYY-MM" the budget applies to. */
+  ym: string;
+  /** Monthly limit — decimal string "12000.00" (never a JSON number). */
+  total: string;
+  /** cat → decimal string (may be empty). */
+  cats: Record<string, string>;
+}
+
+/**
+ * The full-fidelity backup document (schema BackupEnvelope, ADR-0012) —
+ * BOTH directions of the flow: GET /export/backup.json returns it and
+ * POST /import/restore accepts it verbatim. `expenses`/`debts` reuse the
+ * CRUD wire shapes, so money stays exact decimal STRINGS end-to-end
+ * (ADR-0004 §1): fetch → stringify → share/POST must never round or
+ * reformat a value.
+ */
+export interface BackupEnvelope {
+  /** Always 1 today; absent in exotic clients → optional. */
+  schema_version?: number;
+  /** RFC 3339 timestamp of the export. */
+  exported_at: string;
+  counts: { expenses: number; debts: number; budgets: number };
+  expenses: Expense[];
+  debts: Debt[];
+  budgets: BackupBudgetRow[];
+}
+
+/** POST /api/v1/import/restore response (RestoreOut). */
+export interface RestoreResult {
+  /** How many rows of each collection were inserted. */
+  restored: { expenses: number; debts: number; budgets: number };
+}
+
+/**
+ * GET /api/v1/export/backup.json (Bearer access) → 200 envelope.
+ * Returns the parsed JSON untouched — decimal amounts arrive as strings and
+ * are handed back as strings (no rounding/reformatting anywhere).
+ */
+export async function exportBackup(
+  accessToken: string,
+): Promise<BackupEnvelope> {
+  return request<BackupEnvelope>("/api/v1/export/backup.json", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/**
+ * POST /api/v1/import/restore (Bearer access) → 200 restored counts;
+ * 422 validation. DESTRUCTIVE: the server REPLACES the caller's whole
+ * ledger (one transaction — a failed restore rolls the deletes back too).
+ * Callers must confirm with the user first.
+ */
+export async function restoreBackup(
+  accessToken: string,
+  envelope: BackupEnvelope,
+): Promise<RestoreResult> {
+  return request<RestoreResult>("/api/v1/import/restore", {
+    method: "POST",
+    body: JSON.stringify(envelope),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+/**
+ * Parse + shape-check pasted backup text BEFORE the destructive restore
+ * (mobile twin of the web's parseBackupFile): a JSON object carrying a
+ * `schema_version` key or at least one of the three row arrays, where any
+ * row collection that IS present must be an array. Returns null for
+ * everything else — wrong app's JSON, truncated paste, a bare list, or
+ * text that isn't JSON at all — so we never wipe a ledger on bad input.
+ */
+export function parseBackupEnvelope(text: string): BackupEnvelope | null {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+    const env = parsed as Record<string, unknown>;
+    let arrays = 0;
+    for (const key of ["expenses", "debts", "budgets"] as const) {
+      const value = env[key];
+      if (value !== undefined) {
+        if (!Array.isArray(value)) return null;
+        arrays += 1;
+      }
+    }
+    if (!("schema_version" in env) && arrays === 0) return null;
+    return parsed as BackupEnvelope;
+  } catch {
+    return null; // not JSON at all
+  }
+}
+
 // --- Recurring expenses (Phase 5, T16.1/T16.3) ---------------------------------
 
 /**
