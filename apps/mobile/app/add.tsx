@@ -11,15 +11,19 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 
 import {
   ApiError,
   createExpense,
   createExpensesBulk,
+  listKhataCategories,
   voiceParse,
   type ExpenseCreateInput,
   type ExpenseGroup,
+  type Khata,
   type ParsedExpense,
   type PayMethod,
 } from "../lib/api";
@@ -55,8 +59,18 @@ const VOICE_LOCALE = "bn-BD";
 /** Mic-button states: idle → listening → parsing → confirm sheet. */
 type VoicePhase = "idle" | "listening" | "parsing" | "confirm";
 
+/** Local device date as YYYY-MM-DD (T20.3 quick chips) — offsetDays −1 = yesterday. */
+function localIso(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIso(0);
 }
 
 function isValidIso(value: string): boolean {
@@ -168,6 +182,29 @@ export default function AddExpense() {
   // Leaving the screen must not leave a timer that would resurrect the draft
   // after a successful create has already cleared it.
   useEffect(() => () => cancelDraftSave(), []);
+
+  // --- Khata recents (T20.4-mob — web T20.4 twin) ------------------------------
+  // Top 8 khatas fetched once on mount as prefill hints. Silent-fail: on any
+  // error (or an empty history) the row simply never renders — the manual
+  // form is never blocked on it.
+  const [recents, setRecents] = useState<Khata[]>([]);
+
+  useEffect(() => {
+    const token = auth.accessToken;
+    if (token === null) return;
+    let cancelled = false;
+    void listKhataCategories(token)
+      .then((items) => {
+        if (!cancelled) setRecents(items.slice(0, 8));
+      })
+      .catch(() => {
+        // Recents are a convenience — swallow and hide the row.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function resetVoiceSheet() {
     setVoicePhase("idle");
@@ -301,6 +338,9 @@ export default function AddExpense() {
   const validIso = isValidIso(iso.trim());
   const canSubmit = validAmount && validCat && validIso && !pending;
   const voiceCanSave = voiceCandidates.length > 0 && !voiceSaving;
+  // T20.3 quick-chip targets (local device dates, YYYY-MM-DD).
+  const todayStr = localIso(0);
+  const yesterdayStr = localIso(-1);
 
   function cancelVoiceSheet() {
     if (voiceSaving) return;
@@ -372,6 +412,34 @@ export default function AddExpense() {
             editable={!pending}
           />
 
+          {/* Khata recents (T20.4-mob): top-8 prefill chips, hidden until the
+              categories fetch returns rows. Tap fills cat AND grp. */}
+          {recents.length > 0 && (
+            <View style={styles.recentsWrap}>
+              <Text style={styles.recentsLabel}>{t("recentsLabel")}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentsScroll}
+              >
+                {recents.map((khata) => (
+                  <Chip
+                    key={khata.cat}
+                    label={khata.cat}
+                    selected={cat.trim() === khata.cat}
+                    disabled={pending}
+                    style={styles.recentChip}
+                    onPress={() => {
+                      setCat(khata.cat);
+                      setGrp(khata.grp);
+                      queueDraftSave({ cat: khata.cat, grp: khata.grp });
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           <Text style={styles.label}>{STRINGS.bn.category}</Text>
           <TextInput
             style={styles.input}
@@ -418,6 +486,28 @@ export default function AddExpense() {
           </View>
 
           <Text style={styles.label}>{STRINGS.bn.dateLabel}</Text>
+          {/* T20.3 quick chips: আজ / গতকাল — local device dates. Selection is
+              derived from iso, so any manual TextInput edit deactivates both. */}
+          <View style={styles.chipWrap}>
+            <Chip
+              label={t("dayToday")}
+              selected={iso.trim() === todayStr}
+              disabled={pending}
+              onPress={() => {
+                setIso(todayStr);
+                queueDraftSave({ iso: todayStr });
+              }}
+            />
+            <Chip
+              label={t("dayYesterday")}
+              selected={iso.trim() === yesterdayStr}
+              disabled={pending}
+              onPress={() => {
+                setIso(yesterdayStr);
+                queueDraftSave({ iso: yesterdayStr });
+              }}
+            />
+          </View>
           <TextInput
             style={styles.input}
             value={iso}
@@ -429,6 +519,8 @@ export default function AddExpense() {
             maxLength={10}
             editable={!pending}
           />
+          {/* T20.2 web twin hint — bn/en via prefs. */}
+          <Text style={styles.dateHint}>{t("dateHint")}</Text>
 
           <Text style={styles.label}>{STRINGS.bn.descLabel}</Text>
           <TextInput
@@ -592,11 +684,14 @@ function Chip({
   selected,
   disabled,
   onPress,
+  style,
 }: {
   label: string;
   selected: boolean;
   disabled: boolean;
   onPress: () => void;
+  /** Optional extra container style (e.g. recents-chip maxWidth). */
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
     <Pressable
@@ -604,13 +699,20 @@ function Chip({
         styles.chip,
         selected && styles.chipSelected,
         pressed && !disabled && styles.chipPressed,
+        style,
       ]}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ selected }}
     >
-      <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
+      {/* numberOfLines=1 keeps long khata names (T20.4 recents) from wrapping
+          or overflowing the chip; short labels are unaffected. */}
+      <Text
+        style={[styles.chipLabel, selected && styles.chipLabelSelected]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
         {label}
       </Text>
     </Pressable>
@@ -683,6 +785,27 @@ const styles = StyleSheet.create({
   chipLabelSelected: {
     color: theme.colors.onAccent,
     fontWeight: "600",
+  },
+  // --- Khata recents (T20.4-mob) -------------------------------------------
+  recentsWrap: {
+    gap: theme.spacing.sm,
+  },
+  recentsLabel: {
+    color: theme.colors.muted,
+    fontSize: 13,
+  },
+  recentsScroll: {
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    flexGrow: 1,
+  },
+  recentChip: {
+    maxWidth: 220,
+  },
+  // --- Date quick chips (T20.3) ---------------------------------------------
+  dateHint: {
+    color: theme.colors.muted,
+    fontSize: 12,
   },
   submitButton: {
     backgroundColor: theme.colors.emerald,

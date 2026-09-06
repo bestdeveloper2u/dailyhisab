@@ -230,6 +230,12 @@ export const STRINGS = {
 
     // Draft autosave (T19.3 — add-expense form persisted via SecureStore)
     toastDraftRestored: "অসম্পূর্ণ খরচের খসড়া পুনরুদ্ধার হয়েছে",
+
+    // Date quick-chips + hint (T20.3) and khata recents row (T20.4-mob)
+    dayToday: "আজ",
+    dayYesterday: "গতকাল",
+    dateHint: "ভুলে যাওয়া খরচ? ক্যালেন্ডার থেকে আগের যেকোনো তারিখ বেছে নিন",
+    recentsLabel: "সাম্প্রতিক খাত",
   },
   en: {
     account: "Account",
@@ -456,6 +462,12 @@ export const STRINGS = {
 
     // Draft autosave (T19.3 — add-expense form persisted via SecureStore)
     toastDraftRestored: "Restored your unfinished expense draft",
+
+    // Date quick-chips + hint (T20.3) and khata recents row (T20.4-mob)
+    dayToday: "Today",
+    dayYesterday: "Yesterday",
+    dateHint: "Forgot a cost? Pick any earlier date from the calendar",
+    recentsLabel: "Recent khatas",
   },
 } as const;
 

@@ -254,6 +254,32 @@ export async function createExpense(
   });
 }
 
+/**
+ * One distinct khata (category) derived from the caller's history
+ * (ADR-0019). `grp`/`last_used` come from the khata's most recent expense
+ * and are prefill hints only.
+ */
+export interface Khata {
+  cat: string;
+  grp: ExpenseGroup;
+  /** How many of the caller's expenses use this khata (≥ 1). */
+  use_count: number;
+  /** "YYYY-MM-DD" of the khata's most recent expense. */
+  last_used: string;
+}
+
+/** GET /api/v1/expenses/categories (Bearer access) → khata rows,
+ * most-used → most-recent (ADR-0019); 401 expired/invalid. */
+export async function listKhataCategories(
+  accessToken: string,
+): Promise<Khata[]> {
+  const out = await request<{ items: Khata[] }>("/api/v1/expenses/categories", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return out.items;
+}
+
 // --- Voice parse + bulk create (Phase 4, T15.2) -------------------------------
 
 /** One expense candidate from POST /voice/parse (schema: ParsedItem). */
