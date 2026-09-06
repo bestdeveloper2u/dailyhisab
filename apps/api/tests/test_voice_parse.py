@@ -135,6 +135,29 @@ async def test_parse_thousand_multiplier(client: AsyncClient) -> None:
     assert items[0]["amt"] == "1000.00"
 
 
+async def test_parse_number_word_times_thousand(client: AsyncClient) -> None:
+    """CTO T24 regression: 'আট হাজার' must be 8000, not হাজার(1000)×1000.
+
+    The longest-first word scan used to pick হাজার itself as the base word and
+    then multiply by হাজার again → 1,000,000. হাজার is a MULTIPLIER only; a bare
+    "হাজার টাকা" still means 1000.
+    """
+    headers, _ = await register_user(client, email="voice5b@test.dev")
+    r = await client.post(VOICE, json={"text": "বই আট হাজার"}, headers=headers)
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert len(items) == 1
+    assert items[0]["grp"] == "education"
+    assert items[0]["amt"] == "8000.00"
+
+    r = await client.post(VOICE, json={"text": "রিকশায় হাজার টাকা"}, headers=headers)
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert len(items) == 1
+    assert items[0]["grp"] == "transport"
+    assert items[0]["amt"] == "1000.00"
+
+
 async def test_parse_number_word_amount_low_confidence(client: AsyncClient) -> None:
     headers, _ = await register_user(client, email="voice6@test.dev")
     r = await client.post(VOICE, json={"text": "চা পাঁচ টাকা"}, headers=headers)

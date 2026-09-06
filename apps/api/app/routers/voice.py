@@ -196,22 +196,31 @@ def _extract_amount(seg: str) -> tuple[Decimal | None, bool]:
     """Return ``(amount, explicit_digits)`` for the segment.
 
     ``amount`` is ``None`` when the segment carries no usable amount.
+    হাজার is a MULTIPLIER only — never the base word. The longest-first scan
+    used to match হাজার first ("আট হাজার" → base 1000) and then multiply by
+    হাজার again → 1,000,000. Now: digits×হাজার, word×হাজার, or a bare
+    "হাজার" = 1000.
     """
     digit_match = _AMOUNT.search(seg)
     if digit_match is not None:
         amount = Decimal(digit_match.group(0))
-    else:
-        word_value: int | None = None
-        for word in _NUMBER_WORDS_ORDERED:
-            if word in seg:
-                word_value = _NUMBER_WORDS[word]
-                break
-        if word_value is None:
+        if _THOUSAND_WORD in seg:
+            amount *= Decimal(1000)
+        return amount, True
+    word_value: int | None = None
+    for word in _NUMBER_WORDS_ORDERED:
+        if word != _THOUSAND_WORD and word in seg:
+            word_value = _NUMBER_WORDS[word]
+            break
+    if word_value is None:
+        if _THOUSAND_WORD not in seg:
             return None, False
+        amount = Decimal(1000)  # bare "হাজার টাকা"
+    elif _THOUSAND_WORD in seg:
+        amount = Decimal(word_value * 1000)
+    else:
         amount = Decimal(word_value)
-    if _THOUSAND_WORD in seg:
-        amount *= Decimal(1000)
-    return amount, digit_match is not None
+    return amount, False
 
 
 def _strip_amount_text(seg: str) -> str:
