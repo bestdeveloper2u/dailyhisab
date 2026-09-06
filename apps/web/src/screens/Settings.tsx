@@ -8,7 +8,9 @@ import {
 } from "../lib/catalog";
 import { LangToggle } from "../components/LangToggle";
 import { DataSafety } from "../components/DataSafety";
+import { InstallChip } from "../components/InstallChip";
 import { Segmented } from "../components/Segmented";
+import { SessionsCard } from "../components/SessionsCard";
 import { useAuthStore } from "../store/auth";
 import { useLangStore } from "../store/lang";
 import {
@@ -143,6 +145,9 @@ export function Settings() {
                 v{APP_VERSION}
               </span>
             </Row>
+            {/* T26.1 PWA install chip — only renders when the browser
+                actually offered beforeinstallprompt (renders null otherwise) */}
+            <InstallChip />
             <Row label={
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold">{user?.name ?? user?.email ?? t(lang, "login")}</span>
@@ -160,6 +165,9 @@ export function Settings() {
               </button>
             </Row>
           </Card>
+
+          {/* সক্রিয় সেশন (T26.2 — GET /auth/sessions) */}
+          <SessionsCard />
         </div>
       </div>
     </section>

@@ -10,6 +10,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  api,
   apiBulkCreateExpenses,
   apiCreateDebt,
   apiCreateExpense,
@@ -31,7 +32,10 @@ import {
   apiUpdateRecurring,
   apiVoiceParse,
   apiYearlyReport,
+  errorMessage,
+  type ApiResult,
   type BudgetInput,
+  type components,
   type Debt,
   type DebtCreateInput,
   type DebtStatus,
@@ -43,6 +47,7 @@ import {
   type RecurringCreateInput,
   type RecurringUpdateInput,
 } from "@khoroch/api-client";
+import { toBnDigits } from "@khoroch/core";
 import { useLangStore } from "../store/lang";
 import { toast } from "../lib/toast";
 import { w } from "../lib/web-i18n";
@@ -82,6 +87,7 @@ export const qk = {
   budget: (ym: string, lang: Lang) => ["budgets", ym, lang] as const,
   recurring: (filter: RecurringFilter) => ["recurring", "list", filter] as const,
   khataCategories: ["khata", "categories"] as const,
+  sessions: ["auth", "sessions"] as const,
 };
 
 /** Keyset-paginated expense list (`{items, next_cursor}` per page). */
@@ -383,6 +389,86 @@ export function useRecurringMutations() {
   });
 
   return { create, update, remove, run };
+}
+
+/* ------------------------------------------------------------------ */
+/* Auth sessions (T26.2 — backend v0.21.0)                             */
+/* ------------------------------------------------------------------ */
+
+export type SessionsOut = components["schemas"]["SessionsOut"];
+export type SessionItem = components["schemas"]["SessionItemOut"];
+export type RevokeOthersResult = components["schemas"]["RevokeOthersOut"];
+
+/**
+ * Typed 409: the access token carried no `sid` claim, so the server refuses
+ * to guess which session to keep (POST /auth/sessions/revoke-others). The UI
+ * checks `instanceof` and shows the "current session not identified" helper
+ * instead of a generic failure toast.
+ */
+export class RevokeOthersConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RevokeOthersConflictError";
+  }
+}
+
+/** The caller's live sessions (`current` = this token's sid, or null). */
+export async function apiListSessions(
+  lang: Lang = "bn",
+): Promise<ApiResult<SessionsOut>> {
+  const { data, error, response } = await api.GET("/api/v1/auth/sessions");
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Revoke every session except the caller's own (no request body). */
+export async function apiRevokeOtherSessions(
+  lang: Lang = "bn",
+): Promise<ApiResult<RevokeOthersResult>> {
+  const { data, error, response } = await api.POST("/api/v1/auth/sessions/revoke-others", {});
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** GET /auth/sessions — raw ApiResult, handled by SessionsCard like other queries. */
+export function useSessions() {
+  const lang = useLangStore((s) => s.lang);
+  return useQuery({
+    queryKey: qk.sessions,
+    queryFn: () => apiListSessions(lang),
+  });
+}
+
+/**
+ * Revoke-others mutation: success toasts the localised count (bn digits),
+ * invalidates qk.sessions, and a 409 becomes the typed
+ * RevokeOthersConflictError instead of a toast (the card renders its own
+ * helper for it — mirrors the ok:false-throw style of the other mutations).
+ */
+export function useRevokeOthersMutation() {
+  const lang = useLangStore((s) => s.lang);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<RevokeOthersResult> => {
+      const res = await apiRevokeOtherSessions(lang);
+      if (!res.ok) {
+        throw res.status === 409
+          ? new RevokeOthersConflictError(res.detail || w(lang, "errFallback"))
+          : new Error(res.detail || w(lang, "errFallback"));
+      }
+      return res.data;
+    },
+    onSuccess: async (data) => {
+      const n = lang === "bn" ? toBnDigits(String(data.revoked)) : String(data.revoked);
+      toast(w(lang, "sessionsRevoked").replace("{n}", n));
+      await qc.invalidateQueries({ queryKey: qk.sessions });
+    },
+    onError: (err) => {
+      // 409 is surfaced to the caller as state, not a message toast.
+      if (err instanceof RevokeOthersConflictError) return;
+      toast(w(lang, "sessionsRevokeErr"));
+    },
+  });
 }
 
 /** Utility for optimistic delete flows elsewhere; exported for symmetry. */

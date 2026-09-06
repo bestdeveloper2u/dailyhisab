@@ -277,6 +277,23 @@ export const W = {
     dupSaveAnyway: "তবুও সংরক্ষণ করুন",
     dupFormWarn: "একই খরচ আগেই যোগ হয়েছে বলে মনে হচ্ছে — আসলেই দ্বিতীয়টি হলে তবুও যোগ করুন, নাহলে পরিমাণ বা খাত বদলান।",
     dupAddAnyway: "তবুও যোগ করুন",
+ 
+    // T26.1 PWA install chip (MDN BeforeInstallPromptEvent)
+    installApp: "অ্যাপ ইনস্টল করুন",
+    installLater: "পরে",
+    installDone: "অ্যাপ ইনস্টল হয়েছে",
+    // T26.2 active sessions (GET /auth/sessions — backend v0.21.0)
+    sessionsTitle: "সক্রিয় সেশন",
+    sessionsThisDevice: "এই ডিভাইস",
+    sessionsOthersLbl: "অন্য ডিভাইস",
+    sessionsRevoke: "অন্য ডিভাইস বাতিল করুন",
+    sessionsConfirm: "নিশ্চিত করুন?",
+    sessionsRevoking: "বাতিল হচ্ছে…",
+    sessionsRevoked: "{n} সেশন বাতিল হয়েছে",
+    sessionsRevokeErr: "সেশন বাতিল করা যায়নি",
+    sessionsNoCurrent: "এই সেশন চিহ্নিত করা যায়নি",
+    sessionsNoOthers: "অন্য কোনো সক্রিয় সেশন নেই",
+    sessionsLoadErr: "সেশন লোড করা যায়নি — আবার চেষ্টা করুন",
   },
   en: {
     searchPh: "Search — category, note…",
@@ -548,6 +565,23 @@ export const W = {
     dupSaveAnyway: "Save anyway",
     dupFormWarn: "You seem to have added this expense already — tap Add anyway only if it really is a second one.",
     dupAddAnyway: "Add anyway",
+ 
+    // T26.1 PWA install chip (MDN BeforeInstallPromptEvent)
+    installApp: "Install app",
+    installLater: "Later",
+    installDone: "App installed",
+    // T26.2 active sessions (GET /auth/sessions — backend v0.21.0)
+    sessionsTitle: "Active sessions",
+    sessionsThisDevice: "This device",
+    sessionsOthersLbl: "Other devices",
+    sessionsRevoke: "Revoke other devices",
+    sessionsConfirm: "Confirm?",
+    sessionsRevoking: "Revoking…",
+    sessionsRevoked: "Revoked {n} session(s)",
+    sessionsRevokeErr: "Could not revoke sessions",
+    sessionsNoCurrent: "Current session not identified",
+    sessionsNoOthers: "No other active sessions",
+    sessionsLoadErr: "Could not load sessions — please retry",
   },
 } as const;
 
