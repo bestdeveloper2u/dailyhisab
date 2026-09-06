@@ -6,7 +6,7 @@ import {
 } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -426,6 +426,50 @@ export default function AddExpense() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // --- Keyboard-aware form (T25.2) ---------------------------------------------
+  // One mechanism per platform: track the soft-keyboard height with RN
+  // Keyboard events (keyboardWill* on iOS, keyboardDid* on Android — the
+  // will* pair never fires on Android with adjustResize) and pad the
+  // ScrollView content by keyboardHeight + 12 while it is open, so the whole
+  // form — amount input included — scrolls clear of the keyboard and the
+  // সংরক্ষণ button is never below the fold. The old KeyboardAvoidingView is
+  // gone: stacked on this padding it would double-compensate. Position and
+  // focus live in refs so the mount-time listeners never read stale values.
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Amount-field top in content coordinates = its layout y (relative to the
+  // form card) + the form card's y (relative to the scroll content).
+  const amountWrapYRef = useRef(0);
+  const formYRef = useRef(0);
+  // Is the amount field focused? A ref: keyboardDidShow must read it without
+  // re-registering the listeners.
+  const amountFocusedRef = useRef(false);
+
+  /** T25.2 — bring the amount field to ~96px below the scroll top (>= 0). */
+  function scrollAmountIntoView() {
+    const y = Math.max(0, formYRef.current + amountWrapYRef.current - 96);
+    scrollRef.current?.scrollTo({ y, animated: true });
+  }
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const height = event.endCoordinates.height;
+      setKeyboardHeight(height > 0 ? height : 0);
+      if (amountFocusedRef.current) scrollAmountIntoView();
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+    // scrollAmountIntoView only touches refs; stable across renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function resetVoiceSheet() {
     setVoicePhase("idle");
     setVoiceCandidates([]);
@@ -645,13 +689,16 @@ export default function AddExpense() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          // T25.2 — while the keyboard is open, pad the content so the whole
+          // form (amount input + সংরক্ষণ button) scrolls clear of it.
+          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 12 },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.title}>{STRINGS.bn.addTitle}</Text>
@@ -666,20 +713,41 @@ export default function AddExpense() {
           </View>
         )}
 
-        <View style={styles.form}>
-          <Text style={styles.label}>{STRINGS.bn.amount}</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={STRINGS.bn.amountPlaceholder}
-            placeholderTextColor={theme.colors.muted}
-            value={amount}
-            onChangeText={(v) => {
-              setAmount(v);
-              queueDraftSave({ amount: v });
+        {/* T25.2 — form y + amount-wrapper y give the field's position in
+            scroll-content coordinates for scrollAmountIntoView. */}
+        <View
+          style={styles.form}
+          onLayout={(e) => {
+            formYRef.current = e.nativeEvent.layout.y;
+          }}
+        >
+          <View
+            style={styles.amountField}
+            onLayout={(e) => {
+              amountWrapYRef.current = e.nativeEvent.layout.y;
             }}
-            keyboardType="decimal-pad"
-            editable={!pending}
-          />
+          >
+            <Text style={styles.label}>{STRINGS.bn.amount}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={STRINGS.bn.amountPlaceholder}
+              placeholderTextColor={theme.colors.muted}
+              value={amount}
+              onChangeText={(v) => {
+                setAmount(v);
+                queueDraftSave({ amount: v });
+              }}
+              onFocus={() => {
+                amountFocusedRef.current = true;
+                scrollAmountIntoView();
+              }}
+              onBlur={() => {
+                amountFocusedRef.current = false;
+              }}
+              keyboardType="decimal-pad"
+              editable={!pending}
+            />
+          </View>
 
           {/* T23.3 quick bump chips: +১০/+৫০/+১০০/+৫০০ directly under the
               amount input — prototype .qchips row parity; each tap ADDS to
@@ -1007,7 +1075,7 @@ export default function AddExpense() {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1066,6 +1134,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: theme.spacing.lg,
     gap: theme.spacing.md,
+  },
+  /** T25.2 — amount label + input wrapper; keeps the sm gap the form gave
+      these two, and carries the onLayout anchor for scroll-into-view. */
+  amountField: {
+    gap: theme.spacing.sm,
   },
   title: {
     color: theme.colors.ink,

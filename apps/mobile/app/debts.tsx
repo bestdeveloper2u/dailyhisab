@@ -1,9 +1,9 @@
 import { moneyFromNumber, t as tCore } from "@khoroch/core";
 import { Redirect, router, useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   RefreshControl,
@@ -96,6 +96,29 @@ export default function Debts() {
 
   // Guard against out-of-order list responses.
   const seq = useRef(0);
+
+  // T25.2 keyboard padding — same single mechanism as add.tsx: track the
+  // soft-keyboard height (keyboardWill* on iOS, keyboardDid* on Android) and
+  // pad the list content while it is open, so the inline pay form and the
+  // list footer clear the keyboard. The KeyboardAvoidingView is replaced by
+  // a plain View; stacked on this padding it would double-compensate.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const height = event.endCoordinates.height;
+      setKeyboardHeight(height > 0 ? height : 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const loadFirstPage = useCallback(
     async (filter: DebtStatusFilter, viaPull: boolean) => {
@@ -245,10 +268,7 @@ export default function Debts() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.brand}>{tCore("bn", "appName")}</Text>
         <Text style={styles.title}>{STRINGS.bn.debtsTitle}</Text>
@@ -267,7 +287,11 @@ export default function Debts() {
 
       <FlatList
         style={styles.list}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          // T25.2 — keyboard-open padding so pay form / footer clear it.
+          keyboardHeight > 0 && { paddingBottom: keyboardHeight + 12 },
+        ]}
         data={error === null ? items : []}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
@@ -487,7 +511,7 @@ export default function Debts() {
           </>
         }
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
