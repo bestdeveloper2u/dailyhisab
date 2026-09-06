@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { AppShell } from "./components/AppShell";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { RecurringAutoRun } from "./lib/recurringRun";
 import { useAuthStore } from "./store/auth";
 
 /**
@@ -76,7 +77,15 @@ function RequireAuth() {
   if (status === "anon") {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
-  return <Outlet />;
+  // T17.1 (ADR-0014 §3): authed tree host for the once-per-local-day
+  // recurring boot run. Renders nothing and never blocks the UI — the
+  // POST is fire-and-forget inside the effect below <Outlet/>.
+  return (
+    <>
+      <RecurringAutoRun />
+      <Outlet />
+    </>
+  );
 }
 
 /**
