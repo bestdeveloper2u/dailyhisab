@@ -42,6 +42,13 @@ interface RecognitionLike {
 type RecognitionCtor = new () => RecognitionLike;
 
 /**
+ * Overall parse confidence at or above which entries are saved without a
+ * confirm step (prototype behaviour: mic → save, no "খুঁজে বের করুন" tap).
+ * Below this the review list appears so amounts can be fixed first.
+ */
+const AUTO_SAVE_CONFIDENCE = 0.7;
+
+/**
  * Google-Translate-style dictation: continuous + interim results, so words
  * appear live while the user speaks. bn-BD rides Chrome's server engine.
  */
@@ -195,20 +202,39 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     wantListenRef.current = false;
     recRef.current?.stop();
     setListening(false);
+    // Auto-add: stopping the mic IS the submit — no separate "find" tap.
+    void runFlow();
   }
 
-  async function handleParse() {
+  /**
+   * Parse → auto-add pipeline (prototype parity: no extra search step).
+   * High confidence → bulk-save immediately and close; low confidence →
+   * review list first; nothing recognized → keep the transcript editable.
+   */
+  async function runFlow() {
     setError(null);
     setSavedCount(null);
     const transcript = text.trim();
-    if (!transcript) return;
+    if (!transcript || pending) return;
     const res = await parse.mutateAsync(transcript);
-    if (res.ok) {
-      setItems(res.data.items);
-      setConfidence(res.data.confidence);
-    } else {
+    if (!res.ok) {
       setError(res.detail || w(lang, "errFallback"));
+      return;
     }
+    setConfidence(res.data.confidence);
+    if (res.data.items.length === 0) {
+      setItems([]); // "কিছু বোঝা যায়নি" — transcript stays for editing
+      return;
+    }
+    if (res.data.confidence >= AUTO_SAVE_CONFIDENCE) {
+      const saved = await saveItems(res.data.items);
+      if (saved) {
+        // Prototype vpDone: brief ✓ then the overlay closes itself.
+        window.setTimeout(() => handleClose(), 1600);
+      }
+      return;
+    }
+    setItems(res.data.items); // low confidence → review before saving
   }
 
   function removeItem(index: number) {
@@ -223,12 +249,12 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
     );
   }
 
-  async function handleSaveAll() {
-    if (!items || items.length === 0) return;
+  /** Sanitize parsed candidates → bulk-create → toast + reset. */
+  async function saveItems(list: ParsedExpense[]): Promise<boolean> {
     setError(null);
     // The parser returns decimal-string amounts (ADR-0004 §1); apply a light
     // numeric sanity pass, normalize to 2 places, default pay/iso.
-    const clean = items
+    const clean = list
       .filter((it) => /^\d{1,10}(\.\d{1,2})?$/.test(it.amt.trim()))
       .map((it) => ({
         amt: Number(it.amt.trim()).toFixed(2),
@@ -240,7 +266,7 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
       }));
     if (clean.length === 0) {
       setError(w(lang, "errAmt"));
-      return;
+      return false;
     }
     const res = await bulkCreate.mutateAsync(clean);
     if (res.ok) {
@@ -255,9 +281,15 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
           ? `✓ ${toBnDigits(String(count))} ${w(lang, "savedCount")}`
           : `✓ ${count} ${w(lang, "savedCount")}`,
       );
-    } else {
-      setError(res.detail || w(lang, "errFallback"));
+      return true;
     }
+    setError(res.detail || w(lang, "errFallback"));
+    return false;
+  }
+
+  async function handleSaveAll() {
+    if (!items || items.length === 0) return;
+    await saveItems(items);
   }
 
   return (
@@ -324,6 +356,13 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
             rows={3}
             value={text}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter submits (auto-add); Shift+Enter makes a new line.
+              if (e.key === "Enter" && !e.shiftKey && !listening) {
+                e.preventDefault();
+                void runFlow();
+              }
+            }}
             placeholder={w(lang, "voicePh")}
             className="w-full resize-none rounded-control border border-line bg-ivory px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-emerald focus:outline-none"
           />
@@ -336,16 +375,16 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
           )}
         </div>
 
-        {items === null && (
+        {items === null || items.length === 0 ? (!listening && text.trim() !== "" && (
           <button
             type="button"
-            onClick={handleParse}
-            disabled={pending || !text.trim()}
+            onClick={() => void runFlow()}
+            disabled={pending}
             className="h-11 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {parse.isPending ? w(lang, "finding") : w(lang, "findBtn")}
+            {parse.isPending ? w(lang, "voiceParsing") : w(lang, "voiceAddBtn")}
           </button>
-        )}
+        )) : null}
 
         {items !== null && items.length === 0 && (
           <p className="text-sm text-muted" role="status">
@@ -366,6 +405,9 @@ export function VoiceOverlay({ open, onClose }: { open: boolean; onClose: () => 
                 </span>
               )}
             </div>
+            {(confidence ?? 1) < AUTO_SAVE_CONFIDENCE && (
+              <p className="text-xs font-semibold text-warning">{w(lang, "voiceReviewHint")}</p>
+            )}
             <ul className="flex flex-col divide-y divide-line rounded-card border border-line">
               {items.map((item, i) => (
                 <li key={`${item.cat}-${i}`} className="flex items-center gap-2 px-3 py-2.5">
