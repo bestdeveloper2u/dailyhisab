@@ -3,6 +3,7 @@ dist/
 coverage/
 .vite/
 .expo/
+*.tsbuildinfo
 *.log
 .env
 .env.local
