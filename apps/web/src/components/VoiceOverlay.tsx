@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { moneyToNumber, toBnDigits } from "@khoroch/core";
-import type { ParsedExpense } from "@khoroch/api-client";
+import type { Expense, ParsedExpense } from "@khoroch/api-client";
 import {
   useExpenseMutations,
   useDebtMutations,
@@ -11,6 +11,13 @@ import { groupName, monthLabel, normalizeAmount, payName, todayIso, ymOfIso } fr
 import { w } from "../lib/web-i18n";
 import { fmtTaka } from "../lib/money";
 import { parseBudgetAmount, parseDebtText, type ParsedDebt } from "../lib/parseDebt";
+import {
+  dupKey,
+  fetchExpensesForDays,
+  findBatchDuplicateKeys,
+  findDuplicateExpenses,
+  itemsHaveDuplicates,
+} from "../lib/duplicate";
 import { useLangStore } from "../store/lang";
 import { Modal } from "./Modal";
 import { toast } from "../lib/toast";
@@ -134,6 +141,9 @@ export function VoiceOverlay({
   const [savedCount, setSavedCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // T24.1 duplicate guard: same-day saved rows fetched for the current parse
+  // (null = not fetched yet) — the review list flags duplicates against them.
+  const [recentRows, setRecentRows] = useState<Expense[] | null>(null);
   const recRef = useRef<RecognitionLike | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
   // Submission guard — set synchronously so Enter key-repeat, double-taps,
@@ -222,6 +232,7 @@ export function VoiceOverlay({
     setSavedCount(null);
     setError(null);
     setNote(null);
+    setRecentRows(null);
   }
 
   function handleClose() {
@@ -393,11 +404,25 @@ export function VoiceOverlay({
         setItems([]); // "কিছু বোঝা যায়নি" — transcript stays for editing
         return;
       }
-      // T23.2 CTO fix: share-target intake NEVER auto-saves, however
-      // confident the parse — the shared text may be accidental or wrong,
-      // so the review step is mandatory (dictation keeps its high-confidence
-      // auto-save: the speaker just said it out loud).
-      if (!fromShareRef.current && res.data.confidence >= AUTO_SAVE_CONFIDENCE) {
+      // T24.1 duplicate-add guard (WCAG 2.2 SC 3.3.4 — "checked"): compare
+      // the parsed candidates against the same days' saved rows before any
+      // save. A confident parse that repeats an expense from minutes ago
+      // parks at the review list instead of auto-saving — the accidental
+      // double-booking now costs one explicit confirm, nothing saved blind.
+      // T23.2 CTO fix also still applies: share-target intake NEVER
+      // auto-saves, however confident the parse (the shared text may be
+      // accidental), so it always parks at review like the low-confidence
+      // and duplicate-suspect paths below.
+      const recent = await fetchExpensesForDays(
+        res.data.items.map((it) => it.iso ?? todayIso()),
+        lang,
+      );
+      setRecentRows(recent);
+      if (
+        !fromShareRef.current &&
+        res.data.confidence >= AUTO_SAVE_CONFIDENCE &&
+        !itemsHaveDuplicates(res.data.items, recent)
+      ) {
         const saved = await saveItems(res.data.items);
         if (saved) {
           // Prototype vpDone: brief ✓ then the overlay closes itself.
@@ -405,7 +430,7 @@ export function VoiceOverlay({
         }
         return;
       }
-      setItems(res.data.items); // low confidence → review before saving
+      setItems(res.data.items); // dup suspicion or low confidence → review first
     } finally {
       busyRef.current = false;
     }
@@ -455,6 +480,7 @@ export function VoiceOverlay({
       setItems(null);
       setTextBoth("");
       setConfidence(null);
+      setRecentRows(null); // T24.1: saved — the guard's rows are stale now
       // Prototype parity: announce the batch save (e.g. "✓ ২টি সংরক্ষিত হয়েছে").
       toast(
         lang === "bn"
@@ -548,6 +574,18 @@ export function VoiceOverlay({
       busyRef.current = false;
     }
   }
+
+  /*
+   * T24.1 — which review rows look like duplicates (of each other inside the
+   * batch, or of rows saved within the recency window)? Recomputed per render
+   * so fixing an amount clears that row's flag live; only when at least one
+   * row is flagged does the save need the explicit "তবুও সংরক্ষণ করুন".
+   */
+  const batchDupKeys = items !== null ? findBatchDuplicateKeys(items) : new Set<string>();
+  const isDupItem = (item: ParsedExpense) =>
+    batchDupKeys.has(dupKey(item)) ||
+    findDuplicateExpenses(item, recentRows ?? []).length > 0;
+  const anyDup = items !== null && items.length > 0 && items.some(isDupItem);
 
   return (
     <Modal open={open} onClose={handleClose} label={w(lang, "voiceTitle")}>
@@ -763,11 +801,27 @@ export function VoiceOverlay({
             {(confidence ?? 1) < AUTO_SAVE_CONFIDENCE && (
               <p className="text-xs font-semibold text-warning">{w(lang, "voiceReviewHint")}</p>
             )}
+            {anyDup && (
+              <div
+                role="alert"
+                className="rounded-control border border-warning bg-warning/5 px-3.5 py-2.5 text-sm text-ink"
+              >
+                <p className="font-bold text-warning">{w(lang, "dupTitle")}</p>
+                <p>{w(lang, "dupVoiceWarn")}</p>
+              </div>
+            )}
             <ul className="flex flex-col divide-y divide-line rounded-card border border-line">
               {items.map((item, i) => (
                 <li key={`${item.cat}-${i}`} className="flex items-center gap-2 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{item.cat}</p>
+                    <p className="truncate text-sm font-semibold">
+                      {item.cat}{" "}
+                      {isDupItem(item) && (
+                        <span className="whitespace-nowrap rounded-full border border-warning px-1.5 text-[11px] font-bold text-warning">
+                          {w(lang, "dupTag")}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted">
                       {groupName(item.grp, lang)} · {payName(item.pay ?? "cash", lang)} ·{" "}
                       {item.iso ?? w(lang, "today")}
@@ -807,7 +861,7 @@ export function VoiceOverlay({
             >
               {bulkCreate.isPending
                 ? w(lang, "saving")
-                : `${w(lang, "saveAll")} (${lang === "bn" ? toBnDigits(String(items.length)) : items.length})`}
+                : `${anyDup ? w(lang, "dupSaveAnyway") : w(lang, "saveAll")} (${lang === "bn" ? toBnDigits(String(items.length)) : items.length})`}
             </button>
           </div>
         )}

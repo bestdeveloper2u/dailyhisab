@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { t } from "@khoroch/core";
 import type { Expense, ExpenseGroup, Khata, PayMethod } from "@khoroch/api-client";
 import { useExpenseMutations, useKhataCategories } from "../lib/queries";
@@ -23,6 +23,8 @@ import {
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
 import { toast } from "../lib/toast";
+import { fetchExpensesForDays, findDuplicateExpenses } from "../lib/duplicate";
+import { fmtTaka } from "../lib/money";
 import { Modal } from "./Modal";
 
 const inputClass =
@@ -58,6 +60,13 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
   const [iso, setIso] = useState(expense?.iso ?? todayIso());
   const [desc, setDesc] = useState(expense?.desc ?? "");
   const [error, setError] = useState<string | null>(null);
+  // T24.1 — the already-saved expense the duplicate guard matched (null =
+  // nothing matched / not checked yet). Non-null turns the next submit into
+  // an explicit "তবুও যোগ করুন" confirmation (WCAG 2.2 SC 3.3.4).
+  const [dupExisting, setDupExisting] = useState<Expense | null>(null);
+  // Field signature the confirmation was given for — any change re-arms the
+  // guard, so a stale confirmation can never bless different values.
+  const dupSigRef = useRef("");
 
   const pending = create.isPending || update.isPending;
 
@@ -137,8 +146,19 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
   /** Close wrapper: dropping an all-empty create form clears any draft. */
   function handleClose() {
     if (isCreate && amt === "" && cat === "" && desc === "") clearExpenseDraft();
+    dupSigRef.current = ""; // T24.1: a reopened form is never pre-confirmed
+    setDupExisting(null);
     onClose();
   }
+
+  // T24.1: editing amount/khata/date re-arms the guard — the confirmation
+  // was for those exact values, and changed values must be re-checked.
+  useEffect(() => {
+    if (dupExisting !== null && dupSigRef.current !== `${amt}|${cat}|${iso}`) {
+      dupSigRef.current = "";
+      setDupExisting(null);
+    }
+  }, [amt, cat, iso, dupExisting]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,6 +188,23 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
       }
       setError(res.detail || w(lang, "errFallback"));
     } else {
+      // T24.1 — duplicate-add guard (WCAG 2.2 SC 3.3.4 "checked",
+      // https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data):
+      // before a create, compare against that day's saved expenses; on a
+      // match the first submit only shows a warning and the button becomes
+      // "তবুও যোগ করুন" — the re-add goes through only on an explicit second
+      // submit. A failed guard fetch degrades to no-check (fail-open) and
+      // edit mode is never guarded (that row is being changed on purpose).
+      if (dupExisting === null) {
+        const recent = await fetchExpensesForDays([iso], lang);
+        const [hit] = findDuplicateExpenses({ amt: amtStr, cat: catTrimmed, iso }, recent);
+        if (hit) {
+          dupSigRef.current = `${amt}|${cat}|${iso}`;
+          setDupExisting(hit);
+          return;
+        }
+      }
+      setDupExisting(null);
       // T20.2 optimistic create: the row is already in the list cache (see
       // useExpenseMutations); a server rejection throws here after rollback.
       try {
@@ -213,6 +250,23 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
           >
             {error}
           </p>
+        )}
+
+        {/* T24.1 duplicate guard (WCAG 2.2 SC 3.3.4): a checked submission —
+            the save waits for the explicit "তবুও যোগ করুন" tap below. */}
+        {dupExisting && (
+          <div
+            role="alert"
+            className="rounded-control border border-warning bg-warning/5 px-3.5 py-2.5 text-sm text-ink"
+          >
+            <p className="font-bold text-warning">{w(lang, "dupTitle")}</p>
+            <p>
+              {w(lang, "dupFormWarn")}{" "}
+              <span className="font-semibold">
+                {dupExisting.cat} · {fmtTaka(dupExisting.amt, lang)}
+              </span>
+            </p>
+          </div>
         )}
 
         <div className="flex flex-col gap-1.5">
@@ -429,7 +483,11 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
           disabled={pending}
           className="h-12 rounded-control bg-emerald font-bold text-accent-ink transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? w(lang, "saving") : w(lang, "save")}
+          {pending
+            ? w(lang, "saving")
+            : dupExisting !== null
+              ? w(lang, "dupAddAnyway")
+              : w(lang, "save")}
         </button>
       </form>
     </Modal>

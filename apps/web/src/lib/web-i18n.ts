@@ -269,6 +269,14 @@ export const W = {
     // offline outbox (T23.1 — ADR-0022); offlineFlushed carries an {n} count slot
     offlineQueued: "অফলাইনে আছেন — খরচটি ডিভাইসে জমা হয়েছে, ইন্টারনেট এলে যোগ হবে",
     offlineFlushed: "{n} টি অফলাইন খরচ যোগ হয়েছে",
+    // T24.1 duplicate-add guard (WCAG 2.2 SC 3.3.4 — "checked" submissions:
+    // https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data)
+    dupTitle: "সম্ভাব্য ডুপ্লিকেট খরচ",
+    dupVoiceWarn: "নিচের খরচগুলো সবেমাত্র যোগ হয়েছে বলে মনে হচ্ছে — দুবার যোগ হওয়া আটকাতে আগে মিলিয়ে নিন।",
+    dupTag: "আগেই আছে",
+    dupSaveAnyway: "তবুও সংরক্ষণ করুন",
+    dupFormWarn: "একই খরচ আগেই যোগ হয়েছে বলে মনে হচ্ছে — আসলেই দ্বিতীয়টি হলে তবুও যোগ করুন, নাহলে পরিমাণ বা খাত বদলান।",
+    dupAddAnyway: "তবুও যোগ করুন",
   },
   en: {
     searchPh: "Search — category, note…",
@@ -532,6 +540,14 @@ export const W = {
     // offline outbox (T23.1 — ADR-0022); offlineFlushed carries an {n} count slot
     offlineQueued: "You're offline — the expense is saved on this device and will be added when you reconnect",
     offlineFlushed: "{n} offline expenses added",
+    // T24.1 duplicate-add guard (WCAG 2.2 SC 3.3.4 — "checked" submissions:
+    // https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data)
+    dupTitle: "Possible duplicate expense",
+    dupVoiceWarn: "The items below look like expenses you just added — review them first so nothing is saved twice.",
+    dupTag: "already added",
+    dupSaveAnyway: "Save anyway",
+    dupFormWarn: "You seem to have added this expense already — tap Add anyway only if it really is a second one.",
+    dupAddAnyway: "Add anyway",
   },
 } as const;
 
