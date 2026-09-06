@@ -6,6 +6,22 @@
     <meta name="theme-color" content="#0E6B50" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!--
+      T21.4 — preload the Bengali subset of Noto Sans Bengali (verified against
+      public/fonts/ and the matching @font-face in src/index.css): bn is the
+      LCP text of a Bengali-first app, so warming the font before CSS discovery
+      removes a render-blocking round trip (MDN rel=preload; fonts are fetched
+      in CORS mode, hence crossorigin even same-origin). Only this one font is
+      preloaded — the latin subsets are small and font-display: swap already
+      covers them.
+    -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/fonts/noto-bengali-variable-bengali.woff2"
+    />
     <title>Daily Hisab — দৈনিক খরচের হিসাব</title>
     <script>
       /*

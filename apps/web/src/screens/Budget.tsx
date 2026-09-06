@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { moneyToNumber, t } from "@khoroch/core";
 import type { Budget } from "@khoroch/api-client";
 import { useBudget, useBudgetMutation } from "../lib/queries";
@@ -8,6 +9,8 @@ import { fmtTaka } from "../lib/money";
 import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 import { toast } from "../lib/toast";
+import { IconMic } from "../components/icons";
+import { VoiceOverlay } from "../components/VoiceOverlay";
 
 /** Prototype tag rule: ≤75% good, ≤100% warn, above over. */
 function budgetTag(pct: number, lang: "bn" | "en"): { label: string; cls: string } {
@@ -243,6 +246,30 @@ export function Budget() {
   const [ym, setYm] = useState(ymOfIso(todayIso()));
   const query = useBudget(ym);
   const budget = query.data?.ok ? query.data.data : null;
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  /*
+   * Shell FAB deep-links (prototype fabMode/addFab): ?voice=1 opens the
+   * budget-voice overlay, ?focus=total scrolls to + focuses the monthly
+   * limit input. The input lives in TotalCard, which only mounts once the
+   * budget query resolves — hold the param until then.
+   */
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  useEffect(() => {
+    if (searchParams.get("voice") === "1") {
+      setVoiceOpen(true);
+      setSearchParams({}, { replace: true });
+    } else if (searchParams.get("focus") === "total") {
+      if (query.isPending) return; // input not mounted yet — retry on resolve
+      const el = document.getElementById("budTotal") as HTMLInputElement | null;
+      if (el) {
+        el.scrollIntoView({ block: "center" });
+        el.focus({ preventScroll: true });
+        el.select();
+      }
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, query.isPending]);
 
   // by_cat is the union of budgeted cats and cats with spend that month.
   const cats = useMemo(
@@ -263,6 +290,17 @@ export function Budget() {
         onNext={() => setYm((m) => shiftYm(m, 1))}
         lang={lang}
       />
+
+      {/* Budget-voice entry (prototype VOICE_CTX.budget): speak the month's
+          limit, review the parsed amount, then PUT /budgets. */}
+      <button
+        type="button"
+        onClick={() => setVoiceOpen(true)}
+        className="mt-3 flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-sm font-semibold text-ink hover:bg-surface-2"
+      >
+        <IconMic className="h-4 w-4" />
+        {w(lang, "voiceBtn")}
+      </button>
 
       {query.isPending && (
         <p className="mt-5 text-sm text-muted" role="status">
@@ -296,6 +334,9 @@ export function Budget() {
           )}
         </>
       )}
+
+      {/* Context-aware voice (prototype VOICE_CTX.budget) — parses on-device. */}
+      <VoiceOverlay open={voiceOpen} onClose={() => setVoiceOpen(false)} mode="budget" />
     </section>
   );
 }
