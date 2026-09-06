@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { t } from "@khoroch/core";
 import type { Expense, ExpenseGroup, PayMethod } from "@khoroch/api-client";
 import { useExpenseMutations } from "../lib/queries";
@@ -12,6 +12,12 @@ import {
   todayIso,
 } from "../lib/catalog";
 import { normalizeAmountInput } from "../lib/num";
+import {
+  clearExpenseDraft,
+  DRAFT_RESTORED_MSG,
+  loadExpenseDraft,
+  saveExpenseDraft,
+} from "../lib/draft";
 import { w } from "../lib/web-i18n";
 import { useLangStore } from "../store/lang";
 import { toast } from "../lib/toast";
@@ -45,6 +51,49 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
   const [error, setError] = useState<string | null>(null);
 
   const pending = create.isPending || update.isPending;
+
+  // T19.2 draft autosave — CREATE mode only; edit mode never reads or
+  // writes the draft (the form remounts per target via `key`, so the
+  // create/edit split is stable within one mount).
+  const isCreate = !expense;
+
+  // Restore on open: a saved draft with any non-empty typed field wins
+  // over the blank defaults. Selects/date always carry a value, so amt /
+  // cat / desc decide whether this is a real draft.
+  useEffect(() => {
+    if (!open || !isCreate) return;
+    const draft = loadExpenseDraft();
+    if (!draft) return;
+    if (draft.amt === "" && draft.cat === "" && draft.desc === "") return;
+    setAmt(draft.amt);
+    setCat(draft.cat);
+    if (GROUP_ORDER.includes(draft.grp as ExpenseGroup)) setGrp(draft.grp as ExpenseGroup);
+    if (draft.pay in PAY_LABELS) setPay(draft.pay as PayMethod);
+    if (draft.iso !== "") setIso(draft.iso);
+    setDesc(draft.desc);
+    saveExpenseDraft(draft); // re-arm immediately in case a re-render is delayed
+    toast(DRAFT_RESTORED_MSG[useLangStore.getState().lang]);
+  }, [open, isCreate]);
+
+  // Debounced autosave (300ms): every change persists the draft; an
+  // all-empty form clears it. Closed modal / edit mode never saves.
+  useEffect(() => {
+    if (!open || !isCreate) return;
+    const timer = setTimeout(() => {
+      saveExpenseDraft(
+        amt === "" && cat === "" && desc === ""
+          ? null
+          : { amt, cat, grp, pay, iso, desc },
+      );
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [open, isCreate, amt, cat, grp, pay, iso, desc]);
+
+  /** Close wrapper: dropping an all-empty create form clears any draft. */
+  function handleClose() {
+    if (isCreate && amt === "" && cat === "" && desc === "") clearExpenseDraft();
+    onClose();
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,6 +132,7 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
         desc: desc.trim() || null,
       });
       if (res.ok) {
+        clearExpenseDraft(); // T19.2: a saved expense is no longer a draft
         setAmt("");
         setCat("");
         setDesc("");
@@ -95,13 +145,13 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} label={w(lang, expense ? "editTitle" : "addTitle")}>
+    <Modal open={open} onClose={handleClose} label={w(lang, expense ? "editTitle" : "addTitle")}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5" aria-busy={pending}>
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold">{w(lang, expense ? "editTitle" : "addTitle")}</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label={w(lang, "cancel")}
             className="rounded-control px-2 py-1 text-sm font-semibold text-muted hover:bg-surface-2"
           >
