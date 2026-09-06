@@ -6,7 +6,8 @@ pagination), rule-based Bengali voice parsing, and cached monthly/yearly
 reports. Phase 3: debts CRUD + pay close-out (PARTIAL/FULL), monthly
 budgets with spend/usage breakdown, and CSV export. T15.3: full-fidelity
 JSON backup (GET /export/backup.json) + replace-semantics restore
-(POST /import/restore, ADR-0012). Run locally:
+(POST /import/restore, ADR-0012). T16.1: recurring-expense rules + the
+idempotent materialization run (POST /recurring/run, ADR-0014). Run locally:
 uv run uvicorn app.main:app --reload
 """
 
@@ -20,7 +21,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.kv import close_kv
 from app.db.session import dispose_engine
-from app.routers import auth, backup, budgets, debts, expenses, export, health, reports, voice
+from app.routers import (
+    auth,
+    backup,
+    budgets,
+    debts,
+    expenses,
+    export,
+    health,
+    recurring,
+    reports,
+    voice,
+)
 
 logger = logging.getLogger("khoroch.api")
 
@@ -60,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(budgets.router, prefix="/api/v1")
     app.include_router(voice.router, prefix="/api/v1")
     app.include_router(reports.router, prefix="/api/v1")
+    app.include_router(recurring.router, prefix="/api/v1")
     app.include_router(export.router, prefix="/api/v1")
     app.include_router(backup.export_router, prefix="/api/v1")
     app.include_router(backup.import_router, prefix="/api/v1")

@@ -1002,6 +1002,390 @@
         "title": "ParsedItem",
         "type": "object"
       },
+      "RecurringIn": {
+        "description": "POST /recurring body. ``start_date`` defaults to today (router fills).",
+        "properties": {
+          "amt": {
+            "examples": [
+              "890.00"
+            ],
+            "pattern": "^\\d{1,10}\\.\\d{2}$",
+            "title": "Amt",
+            "type": "string"
+          },
+          "cat": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Cat",
+            "type": "string"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "freq": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "title": "Freq",
+            "type": "string"
+          },
+          "grp": {
+            "enum": [
+              "food",
+              "housing",
+              "utility",
+              "transport",
+              "health",
+              "education",
+              "personal",
+              "other"
+            ],
+            "title": "Grp",
+            "type": "string"
+          },
+          "pay": {
+            "default": "cash",
+            "enum": [
+              "cash",
+              "bkash",
+              "nagad",
+              "rocket",
+              "card",
+              "bank"
+            ],
+            "title": "Pay",
+            "type": "string"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "cat",
+          "grp",
+          "amt",
+          "freq"
+        ],
+        "title": "RecurringIn",
+        "type": "object"
+      },
+      "RecurringListOut": {
+        "description": "Envelope for GET /recurring (ADR-0004 \u00a78).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecurringOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "RecurringListOut",
+        "type": "object"
+      },
+      "RecurringOut": {
+        "description": "Public rule row; keys mirror the DB columns exactly.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "amt": {
+            "title": "Amt",
+            "type": "string"
+          },
+          "cat": {
+            "title": "Cat",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "freq": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "title": "Freq",
+            "type": "string"
+          },
+          "grp": {
+            "enum": [
+              "food",
+              "housing",
+              "utility",
+              "transport",
+              "health",
+              "education",
+              "personal",
+              "other"
+            ],
+            "title": "Grp",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "next_run": {
+            "format": "date",
+            "title": "Next Run",
+            "type": "string"
+          },
+          "pay": {
+            "enum": [
+              "cash",
+              "bkash",
+              "nagad",
+              "rocket",
+              "card",
+              "bank"
+            ],
+            "title": "Pay",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "cat",
+          "grp",
+          "amt",
+          "pay",
+          "freq",
+          "start_date",
+          "next_run",
+          "active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RecurringOut",
+        "type": "object"
+      },
+      "RecurringRunOut": {
+        "description": "POST /recurring/run result: what THIS run materialized (ADR-0014 \u00a74).\n\n``created == len(expenses)``; ``rules`` is how many due rules were\nprocessed. A repeat run the same day returns ``created: 0`` \u2014 the\nidempotency guarantee.",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "expenses": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenseOut"
+            },
+            "title": "Expenses",
+            "type": "array"
+          },
+          "ran_on": {
+            "format": "date",
+            "title": "Ran On",
+            "type": "string"
+          },
+          "rules": {
+            "title": "Rules",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ran_on",
+          "created",
+          "rules",
+          "expenses"
+        ],
+        "title": "RecurringRunOut",
+        "type": "object"
+      },
+      "RecurringUpdate": {
+        "description": "PATCH /recurring/{id} body \u2014 every field optional (partial update).",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "amt": {
+            "anyOf": [
+              {
+                "examples": [
+                  "890.00"
+                ],
+                "pattern": "^\\d{1,10}\\.\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amt"
+          },
+          "cat": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cat"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "freq": {
+            "anyOf": [
+              {
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly",
+                  "yearly"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freq"
+          },
+          "grp": {
+            "anyOf": [
+              {
+                "enum": [
+                  "food",
+                  "housing",
+                  "utility",
+                  "transport",
+                  "health",
+                  "education",
+                  "personal",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grp"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cash",
+                  "bkash",
+                  "nagad",
+                  "rocket",
+                  "card",
+                  "bank"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "title": "RecurringUpdate",
+        "type": "object"
+      },
       "RefreshIn": {
         "description": "POST /auth/refresh body.",
         "properties": {
@@ -1279,7 +1663,7 @@
   },
   "info": {
     "title": "Daily Hisab API",
-    "version": "0.11.0"
+    "version": "0.13.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2362,6 +2746,260 @@
         "summary": "Import Restore",
         "tags": [
           "import"
+        ]
+      }
+    },
+    "/api/v1/recurring": {
+      "get": {
+        "description": "List the caller's rules, newest first, keyset-paginated.\n\n``?active=true`` keeps only running rules, ``false`` only paused ones;\nomit for both.",
+        "operationId": "list_recurring_api_v1_recurring_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Recurring",
+        "tags": [
+          "recurring"
+        ]
+      },
+      "post": {
+        "description": "Create one rule (201 with the stored row).\n\n``start_date`` is the FIRST occurrence and defaults to today; the\nmaterialization cursor starts there: ``next_run = start_date``.",
+        "operationId": "create_recurring_api_v1_recurring_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Recurring",
+        "tags": [
+          "recurring"
+        ]
+      }
+    },
+    "/api/v1/recurring/run": {
+      "post": {
+        "description": "Materialize every due occurrence of the caller's active rules (ADR-0014).\n\nA rule is due while ``next_run <= today``. Each due occurrence becomes one\n``expenses`` row with ``iso`` = the occurrence date (catch-up included, up\nto :data:`_MAX_CATCH_UP` per rule); then ``next_run`` moves past ``today``.\nPaused (``active=false``) and future-dated rules are skipped. Re-running\nthe same day is a no-op: ``created: 0`` \u2014 the idempotency contract.",
+        "operationId": "run_recurring_api_v1_recurring_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringRunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Recurring",
+        "tags": [
+          "recurring"
+        ]
+      }
+    },
+    "/api/v1/recurring/{recurring_id}": {
+      "delete": {
+        "description": "Delete the caller's rule (204; unknown/foreign id \u2192 404).\n\nDeleting a rule never touches expenses it already materialized.",
+        "operationId": "delete_recurring_api_v1_recurring__recurring_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recurring_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recurring Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Recurring",
+        "tags": [
+          "recurring"
+        ]
+      },
+      "patch": {
+        "description": "Partially update the caller's rule (omitted fields stay as-is).\n\n``next_run`` is server-owned and forward-only (ADR-0014 \u00a73): if the patch\nchanges ``freq`` or ``start_date``, the cursor is clamped to\n``max(current next_run, new start_date)`` \u2014 it can advance (a later\nstart_date postpones materialization) but never rewind (which would\nre-materialize occurrences that already became expenses).",
+        "operationId": "update_recurring_api_v1_recurring__recurring_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recurring_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recurring Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecurringOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Recurring",
+        "tags": [
+          "recurring"
         ]
       }
     },

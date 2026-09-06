@@ -39,3 +39,15 @@ def debt_body(**overrides: object) -> dict[str, object]:
     }
     body.update(overrides)
     return body
+
+
+def recurring_body(**overrides: object) -> dict[str, object]:
+    """Minimal valid POST /recurring payload with overrides applied."""
+    body: dict[str, object] = {
+        "cat": "রুম ভাড়া",
+        "grp": "housing",
+        "amt": "12000.00",
+        "freq": "monthly",
+    }
+    body.update(overrides)
+    return body

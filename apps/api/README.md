@@ -9,7 +9,7 @@ Alembic, managed with [uv](https://docs.astral.sh/uv/).
 app/
 ├── core/config.py     pydantic-settings (env prefix KHOROCH_)
 ├── db/                base, portable types (GUID, JSONVariant), async session
-├── models/            profiles, expenses, debts, budgets
+├── models/            profiles, expenses, debts, budgets, recurring_expenses
 ├── routers/           /healthz (mounted at / and /api/v1)
 ├── schemas/           pydantic response models
 ├── docs/adr/          see app/docs/adr (repo-level: ../docs/adr)

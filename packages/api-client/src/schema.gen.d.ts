@@ -414,6 +414,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recurring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Recurring
+         * @description List the caller's rules, newest first, keyset-paginated.
+         *
+         *     ``?active=true`` keeps only running rules, ``false`` only paused ones;
+         *     omit for both.
+         */
+        get: operations["list_recurring_api_v1_recurring_get"];
+        put?: never;
+        /**
+         * Create Recurring
+         * @description Create one rule (201 with the stored row).
+         *
+         *     ``start_date`` is the FIRST occurrence and defaults to today; the
+         *     materialization cursor starts there: ``next_run = start_date``.
+         */
+        post: operations["create_recurring_api_v1_recurring_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recurring/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Recurring
+         * @description Materialize every due occurrence of the caller's active rules (ADR-0014).
+         *
+         *     A rule is due while ``next_run <= today``. Each due occurrence becomes one
+         *     ``expenses`` row with ``iso`` = the occurrence date (catch-up included, up
+         *     to :data:`_MAX_CATCH_UP` per rule); then ``next_run`` moves past ``today``.
+         *     Paused (``active=false``) and future-dated rules are skipped. Re-running
+         *     the same day is a no-op: ``created: 0`` — the idempotency contract.
+         */
+        post: operations["run_recurring_api_v1_recurring_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recurring/{recurring_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Recurring
+         * @description Delete the caller's rule (204; unknown/foreign id → 404).
+         *
+         *     Deleting a rule never touches expenses it already materialized.
+         */
+        delete: operations["delete_recurring_api_v1_recurring__recurring_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Recurring
+         * @description Partially update the caller's rule (omitted fields stay as-is).
+         *
+         *     ``next_run`` is server-owned and forward-only (ADR-0014 §3): if the patch
+         *     changes ``freq`` or ``start_date``, the cursor is clamped to
+         *     ``max(current next_run, new start_date)`` — it can advance (a later
+         *     start_date postpones materialization) but never rewind (which would
+         *     re-materialize occurrences that already became expenses).
+         */
+        patch: operations["update_recurring_api_v1_recurring__recurring_id__patch"];
+        trace?: never;
+    };
     "/api/v1/reports/monthly": {
         parameters: {
             query?: never;
@@ -871,6 +959,139 @@ export interface components {
             iso?: string | null;
             /** Pay */
             pay?: ("cash" | "bkash" | "nagad" | "rocket" | "card" | "bank") | null;
+        };
+        /**
+         * RecurringIn
+         * @description POST /recurring body. ``start_date`` defaults to today (router fills).
+         */
+        RecurringIn: {
+            /**
+             * Amt
+             * @example 890.00
+             */
+            amt: string;
+            /** Cat */
+            cat: string;
+            /** Desc */
+            desc?: string | null;
+            /**
+             * Freq
+             * @enum {string}
+             */
+            freq: "daily" | "weekly" | "monthly" | "yearly";
+            /**
+             * Grp
+             * @enum {string}
+             */
+            grp: "food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other";
+            /**
+             * Pay
+             * @default cash
+             * @enum {string}
+             */
+            pay: "cash" | "bkash" | "nagad" | "rocket" | "card" | "bank";
+            /** Start Date */
+            start_date?: string | null;
+        };
+        /**
+         * RecurringListOut
+         * @description Envelope for GET /recurring (ADR-0004 §8).
+         */
+        RecurringListOut: {
+            /** Items */
+            items: components["schemas"]["RecurringOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * RecurringOut
+         * @description Public rule row; keys mirror the DB columns exactly.
+         */
+        RecurringOut: {
+            /** Active */
+            active: boolean;
+            /** Amt */
+            amt: string;
+            /** Cat */
+            cat: string;
+            /** Created At */
+            created_at: string;
+            /** Desc */
+            desc?: string | null;
+            /**
+             * Freq
+             * @enum {string}
+             */
+            freq: "daily" | "weekly" | "monthly" | "yearly";
+            /**
+             * Grp
+             * @enum {string}
+             */
+            grp: "food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other";
+            /** Id */
+            id: string;
+            /**
+             * Next Run
+             * Format: date
+             */
+            next_run: string;
+            /**
+             * Pay
+             * @enum {string}
+             */
+            pay: "cash" | "bkash" | "nagad" | "rocket" | "card" | "bank";
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Updated At */
+            updated_at: string;
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * RecurringRunOut
+         * @description POST /recurring/run result: what THIS run materialized (ADR-0014 §4).
+         *
+         *     ``created == len(expenses)``; ``rules`` is how many due rules were
+         *     processed. A repeat run the same day returns ``created: 0`` — the
+         *     idempotency guarantee.
+         */
+        RecurringRunOut: {
+            /** Created */
+            created: number;
+            /** Expenses */
+            expenses: components["schemas"]["ExpenseOut"][];
+            /**
+             * Ran On
+             * Format: date
+             */
+            ran_on: string;
+            /** Rules */
+            rules: number;
+        };
+        /**
+         * RecurringUpdate
+         * @description PATCH /recurring/{id} body — every field optional (partial update).
+         */
+        RecurringUpdate: {
+            /** Active */
+            active?: boolean | null;
+            /** Amt */
+            amt?: string | null;
+            /** Cat */
+            cat?: string | null;
+            /** Desc */
+            desc?: string | null;
+            /** Freq */
+            freq?: ("daily" | "weekly" | "monthly" | "yearly") | null;
+            /** Grp */
+            grp?: ("food" | "housing" | "utility" | "transport" | "health" | "education" | "personal" | "other") | null;
+            /** Pay */
+            pay?: ("cash" | "bkash" | "nagad" | "rocket" | "card" | "bank") | null;
+            /** Start Date */
+            start_date?: string | null;
         };
         /**
          * RefreshIn
@@ -1658,6 +1879,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RestoreOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_recurring_api_v1_recurring_get: {
+        parameters: {
+            query?: {
+                active?: boolean | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_recurring_api_v1_recurring_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_recurring_api_v1_recurring_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringRunOut"];
+                };
+            };
+        };
+    };
+    delete_recurring_api_v1_recurring__recurring_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recurring_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_recurring_api_v1_recurring__recurring_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recurring_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringOut"];
                 };
             };
             /** @description Validation Error */

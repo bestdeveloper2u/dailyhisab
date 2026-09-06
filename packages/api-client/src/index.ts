@@ -497,3 +497,83 @@ export async function apiPutBudget(
   if (data) return { ok: true, data };
   return { ok: false, status: response.status, detail: errorMessage(error, lang) };
 }
+
+/* ------------------------------------------------------------------ */
+/* Recurring expenses (T16.1 — ADR-0014)                               */
+/* ------------------------------------------------------------------ */
+
+export type Recurring = components["schemas"]["RecurringOut"];
+export type RecurringFreq = Recurring["freq"];
+export type RecurringPage = components["schemas"]["RecurringListOut"];
+export type RecurringCreateInput = components["schemas"]["RecurringIn"];
+export type RecurringUpdateInput = components["schemas"]["RecurringUpdate"];
+export type RecurringRunResult = components["schemas"]["RecurringRunOut"];
+
+export interface RecurringListParams {
+  active?: boolean;
+  limit?: number;
+  cursor?: string | null;
+}
+
+/** Keyset-paginated rule list; `active` filters running (true) or paused (false). */
+export async function apiListRecurring(
+  params: RecurringListParams,
+  lang: Lang = "bn",
+): Promise<ApiResult<RecurringPage>> {
+  const { data, error, response } = await api.GET("/api/v1/recurring", {
+    params: { query: params as Record<string, string | number | undefined> },
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/**
+ * Create one rule (201 with the stored row). `start_date` is the FIRST
+ * occurrence and defaults to today; `next_run` is server-owned.
+ */
+export async function apiCreateRecurring(
+  body: RecurringCreateInput,
+  lang: Lang = "bn",
+): Promise<ApiResult<Recurring>> {
+  const { data, error, response } = await api.POST("/api/v1/recurring", { body });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Partially update the caller's rule (`next_run` is never client-settable). */
+export async function apiUpdateRecurring(
+  recurringId: string,
+  body: RecurringUpdateInput,
+  lang: Lang = "bn",
+): Promise<ApiResult<Recurring>> {
+  const { data, error, response } = await api.PATCH("/api/v1/recurring/{recurring_id}", {
+    params: { path: { recurring_id: recurringId } },
+    body,
+  });
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/** Delete the caller's rule (204; expenses already materialized stay). */
+export async function apiDeleteRecurring(
+  recurringId: string,
+  lang: Lang = "bn",
+): Promise<ApiResult<null>> {
+  const { error, response } = await api.DELETE("/api/v1/recurring/{recurring_id}", {
+    params: { path: { recurring_id: recurringId } },
+  });
+  if (response.ok) return { ok: true, data: null };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
+/**
+ * Materialize every due occurrence into real expenses (idempotent — ADR-0014):
+ * a repeat run the same day returns `created: 0` and never duplicates.
+ */
+export async function apiRunRecurring(
+  lang: Lang = "bn",
+): Promise<ApiResult<RecurringRunResult>> {
+  const { data, error, response } = await api.POST("/api/v1/recurring/run", {});
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
