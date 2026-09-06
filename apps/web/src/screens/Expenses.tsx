@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "react-router";
 import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
 import type { Expense } from "@khoroch/api-client";
@@ -18,6 +18,8 @@ import { fmtTaka } from "../lib/money";
 import { usePageTitle } from "../lib/usePageTitle";
 import { useLangStore } from "../store/lang";
 import { downloadCsv, expensesToCsv } from "../lib/csv";
+import { parseExpensesCsv, type ImportPreview } from "../lib/importCsv";
+import { Modal } from "../components/Modal";
 import { ExpenseForm } from "../components/ExpenseForm";
 import { toast } from "../lib/toast";
 import { VoiceOverlay } from "../components/VoiceOverlay";
@@ -28,6 +30,7 @@ import {
   IconPlus,
   IconSearch,
   IconTrash,
+  IconUpload,
 } from "../components/icons";
 
 /** How many month chips to offer either side of the current month. */
@@ -119,12 +122,16 @@ export function Expenses() {
   usePageTitle("খরচ তালিকা · Daily Hisab");
   const lang = useLangStore((s) => s.lang);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { bulkCreate } = useExpenseMutations();
 
   const [rawQ, setRawQ] = useState("");
   const [q, setQ] = useState("");
   const [month, setMonth] = useState<string | null>(null); // null = All
   const [formOpen, setFormOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // CSV import (owner ask: sheet data must come IN, not only out).
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -174,6 +181,44 @@ export function Expenses() {
     toast(w(lang, "csvDone"));
   }
 
+  /** CSV আমদানি: read the picked file on-device → preview before saving. */
+  async function onImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file later
+    if (!file) return;
+    try {
+      const preview = parseExpensesCsv(await file.text());
+      if (preview.items.length === 0) {
+        toast(w(lang, "importNone"));
+        return;
+      }
+      setImportPreview(preview);
+    } catch {
+      toast(w(lang, "importNone"));
+    }
+  }
+
+  /** Confirm import: save in 100-row batches, then one final toast. */
+  async function confirmImport() {
+    if (!importPreview || bulkCreate.isPending) return;
+    let saved = 0;
+    for (let i = 0; i < importPreview.items.length; i += 100) {
+      try {
+        const res = await bulkCreate.mutateAsync(importPreview.items.slice(i, i + 100));
+        if (!res.ok) break;
+        saved += res.data.length;
+      } catch {
+        break;
+      }
+    }
+    setImportPreview(null);
+    toast(
+      lang === "bn"
+        ? `✓ ${toBnDigits(String(saved))} ${w(lang, "importDone")}`
+        : `✓ ${saved} ${w(lang, "importDone")}`,
+    );
+  }
+
   return (
     <section>
       <h1 className="text-[22px] font-bold sm:text-2xl">{t(lang, "navExpenses")}</h1>
@@ -217,6 +262,22 @@ export function Expenses() {
           <IconDownload className="h-4 w-4" />
           {w(lang, "csvLabel")}
         </button>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          aria-label={w(lang, "importBtn")}
+          className="flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2.5 text-sm font-semibold text-ink hover:bg-surface-2"
+        >
+          <IconUpload className="h-4 w-4" />
+          {w(lang, "importBtn")}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => void onImportFile(e)}
+          className="hidden"
+        />
       </div>
 
       <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label={w(lang, "filterAll")}>
@@ -353,6 +414,53 @@ export function Expenses() {
         }}
       />
       <VoiceOverlay open={voiceOpen} onClose={() => setVoiceOpen(false)} />
+
+      {/* CSV import preview: count + total before anything is saved. */}
+      {importPreview && (
+        <Modal open onClose={() => setImportPreview(null)} label={w(lang, "importTitle")}>
+          <div className="flex flex-col gap-4 p-5">
+            <h2 className="text-base font-bold">{w(lang, "importTitle")}</h2>
+            <p className="text-sm text-muted">
+              {lang === "bn"
+                ? `${toBnDigits(String(importPreview.items.length))} ${w(lang, "importFound")}`
+                : `${importPreview.items.length} ${w(lang, "importFound")}`}
+            </p>
+            <p className="text-lg font-bold tabular-nums text-ink">
+              {w(lang, "importTotal")}:{" "}
+              {fmtTaka(
+                importPreview.items.reduce((s, it) => s + (Number(it.amt) || 0), 0),
+                lang,
+              )}
+            </p>
+            {importPreview.skipped > 0 && (
+              <p className="text-xs font-semibold text-warning">
+                {lang === "bn"
+                  ? `${toBnDigits(String(importPreview.skipped))} ${w(lang, "importSkip")}`
+                  : `${importPreview.skipped} ${w(lang, "importSkip")}`}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void confirmImport()}
+                disabled={bulkCreate.isPending}
+                className="h-11 flex-1 rounded-control bg-emerald font-bold text-accent-ink hover:brightness-110 disabled:opacity-60"
+              >
+                {bulkCreate.isPending
+                  ? w(lang, "saving")
+                  : `${w(lang, "importGo")} (${lang === "bn" ? toBnDigits(String(importPreview.items.length)) : importPreview.items.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportPreview(null)}
+                className="h-11 rounded-control border border-line px-4 text-sm font-semibold text-muted hover:bg-surface-2"
+              >
+                {w(lang, "cancel")}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }
