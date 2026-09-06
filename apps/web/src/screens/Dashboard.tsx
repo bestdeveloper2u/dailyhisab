@@ -143,6 +143,11 @@ export function Dashboard() {
   const todayTotal =
     report?.by_day.find((d) => d.iso === today)?.total ?? "0.00";
 
+  // T22.2 (prototype emptyCta @1196 parity): today is empty exactly when the
+  // already-fetched monthly report has no by-day entry for today (or a ৳0
+  // total) — no extra query needed. Only shown once the report succeeded.
+  const todayEmpty = report !== undefined && num(todayTotal) <= 0;
+
   // Month-over-month delta (prototype updStatDelta).
   const delta =
     prev !== undefined && num(prev.total) > 0
@@ -230,6 +235,33 @@ export function Dashboard() {
               lang={lang}
             />
           </div>
+
+          {/* T22.2: prototype emptyCta — nudge when today has no expenses */}
+          {todayEmpty && (
+            <div className="mt-3 flex flex-col items-start gap-3 rounded-card border border-line bg-surface p-[18px] shadow-card">
+              <p className="text-[13.5px] font-semibold text-muted">
+                {W[lang].emptyToday}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  data-testid="empty-cta-add"
+                  onClick={() => navigate("/expenses?add=1")}
+                  className="rounded-control bg-emerald px-3.5 py-2.5 text-sm font-bold text-accent-ink transition-[filter] hover:brightness-110"
+                >
+                  {W[lang].addNow}
+                </button>
+                <button
+                  type="button"
+                  data-testid="empty-cta-voice"
+                  onClick={() => navigate("/expenses?voice=1")}
+                  className="rounded-control border border-line bg-surface px-3.5 py-2.5 text-sm font-semibold text-ink hover:bg-surface-2"
+                >
+                  {W[lang].voiceNow}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* quick actions (prototype quickrow) */}
           <div className="my-3.5 grid grid-cols-2 gap-2.5">

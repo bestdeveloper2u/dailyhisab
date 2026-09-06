@@ -44,6 +44,26 @@ export default defineConfig({
         dir: "ltr",
         display: "standalone",
         start_url: "/",
+        // App shortcuts (T22.6 — W3C Web App Manifest `shortcuts` member):
+        // long-press quick actions. Both targets are LIVE deep links handled
+        // by Expenses.tsx (?add=1 opens the manual form, ?voice=1 the voice
+        // overlay) — zero new routes.
+        shortcuts: [
+          {
+            name: "নতুন খরচ",
+            short_name: "খরচ",
+            description: "নতুন খরচ যোগ করুন",
+            url: "/expenses?add=1",
+            icons: [{ src: "pwa-192x192.png", sizes: "192x192", type: "image/png" }],
+          },
+          {
+            name: "ভয়েসে যোগ করুন",
+            short_name: "ভয়েস",
+            description: "কণ্ঠ দিয়ে খরচ যোগ করুন",
+            url: "/expenses?voice=1",
+            icons: [{ src: "pwa-192x192.png", sizes: "192x192", type: "image/png" }],
+          },
+        ],
         // Colors from the frozen prototype palette (www/index.html :root).
         theme_color: "#0E6B50",
         background_color: "#F6F5F1",
