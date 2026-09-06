@@ -25,6 +25,12 @@ import {
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
 import { useAuth } from "../lib/auth";
+import {
+  clearExpenseDraft,
+  loadExpenseDraft,
+  saveExpenseDraft,
+  type ExpenseDraft,
+} from "../lib/draft";
 import { usePrefs } from "../lib/prefs";
 import { GROUP_LABELS, PAY_LABELS, STRINGS } from "../lib/strings";
 import { theme } from "../lib/theme";
@@ -94,6 +100,74 @@ export default function AddExpense() {
   useEffect(() => {
     void loadSpeechModule().then((mod) => setVoiceSupported(mod !== null));
   }, []);
+
+  // --- Draft autosave (T19.3 — web T19.2 twin) --------------------------------
+  // The manual form is debounced-persisted to SecureStore; restored once on
+  // mount (before any voice flow can fill fields) and erased on any
+  // successful expense creation.
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced save: coalesce rapid keystrokes, persist the six-field snapshot
+  // 300ms after the last manual change; an all-empty form erases the draft.
+  function queueDraftSave(change: Partial<ExpenseDraft>) {
+    const next: ExpenseDraft = { amount, cat, grp, pay, iso, desc, ...change };
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      draftTimer.current = null;
+      const allEmpty =
+        next.amount.trim().length === 0 &&
+        next.cat.trim().length === 0 &&
+        next.grp.trim().length === 0 &&
+        next.pay.trim().length === 0 &&
+        next.iso.trim().length === 0 &&
+        next.desc.trim().length === 0;
+      void saveExpenseDraft(allEmpty ? null : next);
+    }, 300);
+  }
+
+  /** Drop a pending debounced save (post-create clear must win over it). */
+  function cancelDraftSave() {
+    if (draftTimer.current !== null) {
+      clearTimeout(draftTimer.current);
+      draftTimer.current = null;
+    }
+  }
+
+  // Restore once on mount; guarded setters keep invalid/corrupt grp/pay from
+  // clobbering the chip defaults. No-op when there is nothing stored.
+  useEffect(() => {
+    let cancelled = false;
+    void loadExpenseDraft().then((draft) => {
+      if (cancelled || draft === null) return;
+      const hasAny =
+        draft.amount.trim().length > 0 ||
+        draft.cat.trim().length > 0 ||
+        draft.grp.trim().length > 0 ||
+        draft.pay.trim().length > 0 ||
+        draft.iso.trim().length > 0 ||
+        draft.desc.trim().length > 0;
+      if (!hasAny) return;
+      setAmount(draft.amount);
+      setCat(draft.cat);
+      if ((GROUPS as string[]).includes(draft.grp)) {
+        setGrp(draft.grp as ExpenseGroup);
+      }
+      if ((PAY_METHODS as string[]).includes(draft.pay)) {
+        setPay(draft.pay as PayMethod);
+      }
+      setIso(draft.iso);
+      setDesc(draft.desc);
+      toast(t("toastDraftRestored"));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Leaving the screen must not leave a timer that would resurrect the draft
+  // after a successful create has already cleared it.
+  useEffect(() => () => cancelDraftSave(), []);
 
   function resetVoiceSheet() {
     setVoicePhase("idle");
@@ -205,6 +279,8 @@ export default function AddExpense() {
       }
       resetVoiceSheet();
       setVoiceTranscript("");
+      cancelDraftSave();
+      await clearExpenseDraft();
       toast(t("toastVoiceSaved"));
       router.back(); // list/dashboard reload on focus
     } catch (err) {
@@ -248,6 +324,8 @@ export default function AddExpense() {
         pay,
         desc: trimmedDesc.length > 0 ? trimmedDesc : null,
       });
+      cancelDraftSave();
+      await clearExpenseDraft();
       toast(t("toastExpenseAdded"));
       router.back(); // list reloads on focus
     } catch (err) {
@@ -286,7 +364,10 @@ export default function AddExpense() {
             placeholder={STRINGS.bn.amountPlaceholder}
             placeholderTextColor={theme.colors.muted}
             value={amount}
-            onChangeText={setAmount}
+            onChangeText={(v) => {
+              setAmount(v);
+              queueDraftSave({ amount: v });
+            }}
             keyboardType="decimal-pad"
             editable={!pending}
           />
@@ -297,7 +378,10 @@ export default function AddExpense() {
             placeholder={STRINGS.bn.categoryPlaceholder}
             placeholderTextColor={theme.colors.muted}
             value={cat}
-            onChangeText={setCat}
+            onChangeText={(v) => {
+              setCat(v);
+              queueDraftSave({ cat: v });
+            }}
             editable={!pending}
           />
 
@@ -309,7 +393,10 @@ export default function AddExpense() {
                 label={GROUP_LABELS[g]}
                 selected={grp === g}
                 disabled={pending}
-                onPress={() => setGrp(g)}
+                onPress={() => {
+                  setGrp(g);
+                  queueDraftSave({ grp: g });
+                }}
               />
             ))}
           </View>
@@ -322,7 +409,10 @@ export default function AddExpense() {
                 label={PAY_LABELS[p]}
                 selected={pay === p}
                 disabled={pending}
-                onPress={() => setPay(p)}
+                onPress={() => {
+                  setPay(p);
+                  queueDraftSave({ pay: p });
+                }}
               />
             ))}
           </View>
@@ -331,7 +421,10 @@ export default function AddExpense() {
           <TextInput
             style={styles.input}
             value={iso}
-            onChangeText={setIso}
+            onChangeText={(v) => {
+              setIso(v);
+              queueDraftSave({ iso: v });
+            }}
             keyboardType="numbers-and-punctuation"
             maxLength={10}
             editable={!pending}
@@ -343,7 +436,10 @@ export default function AddExpense() {
             placeholder={STRINGS.bn.descPlaceholder}
             placeholderTextColor={theme.colors.muted}
             value={desc}
-            onChangeText={setDesc}
+            onChangeText={(v) => {
+              setDesc(v);
+              queueDraftSave({ desc: v });
+            }}
             editable={!pending}
           />
 

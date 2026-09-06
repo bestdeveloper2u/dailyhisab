@@ -227,6 +227,9 @@ export const STRINGS = {
     toastCsvFailed: "CSV ডাউনলোড করা যায়নি",
     toastVoiceSaved: "ভয়েস থেকে খরচ সংরক্ষিত ✓",
     toastVoiceFailed: "ভয়েস থেকে সংরক্ষণ করা যায়নি",
+
+    // Draft autosave (T19.3 — add-expense form persisted via SecureStore)
+    toastDraftRestored: "অসম্পূর্ণ খরচের খসড়া পুনরুদ্ধার হয়েছে",
   },
   en: {
     account: "Account",
@@ -450,6 +453,9 @@ export const STRINGS = {
     toastCsvFailed: "CSV download failed",
     toastVoiceSaved: "Expenses saved from voice ✓",
     toastVoiceFailed: "Couldn't save from voice",
+
+    // Draft autosave (T19.3 — add-expense form persisted via SecureStore)
+    toastDraftRestored: "Restored your unfinished expense draft",
   },
 } as const;
 
