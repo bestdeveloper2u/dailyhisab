@@ -2,6 +2,9 @@
  * Client-side Bengali debt-sentence parser (prototype VOICE_CTX.debt parity):
  * "করিমকে ৫০০ টাকা ধার দিলাম, বাজারের বাকি" → party করিম, dir lend, amt 500,
  * note "বাজারের বাকি". Pure regex on-device — no AI call, zero token cost.
+ * Amounts accept digits (৫০০/500) AND Bengali number-words ("পাঁচশো টাকা" →
+ * 500, "আট হাজার টাকা" → 8000), mirroring the server voice parser
+ * (apps/api/app/routers/voice.py _NUMBER_WORDS).
  */
 
 export type ParsedDebt = {
@@ -29,6 +32,76 @@ function normalizeTranscript(raw: string): string {
   return bnToEnDigits(raw.trim())
     .replace(/\s+/g, " ")
     .replace(/(\d),(\d{3})(?!\d)/g, "$1$2");
+}
+
+/*
+ * Bengali number-words — vocabulary copied EXACTLY from the server expense
+ * voice parser (apps/api/app/routers/voice.py _NUMBER_WORDS, same insertion
+ * order). Longest-first matching keeps একশ over এক, পাঁচশ over পাঁচ; the
+ * sort below is stable, so equal-length ties keep the server's order too.
+ */
+const NUMBER_WORDS: Record<string, number> = {
+  "একশ": 100,
+  "পাঁচশ": 500,
+  "দুইশ": 200,
+  "নব্বই": 90,
+  "চল্লিশ": 40,
+  "পঞ্চাশ": 50,
+  "সত্তর": 70,
+  "ত্রিশ": 30,
+  "বিশ": 20,
+  "ষাট": 60,
+  "হাজার": 1000,
+  "দশ": 10,
+  "পাঁচ": 5,
+  "panch": 5,
+  "চার": 4,
+  "ছয়": 6,
+  "সাত": 7,
+  "আট": 8,
+  "নয়": 9,
+  "শত": 100,
+  "dui": 2,
+  "দুই": 2,
+  "তিন": 3,
+  "এক": 1,
+  "আশি": 80,
+};
+const NUMBER_WORDS_ORDERED = Object.keys(NUMBER_WORDS).sort(
+  (a, b) => b.length - a.length,
+);
+
+const THOUSAND_WORD = "হাজার";
+const THOUSAND_MULT = 1000;
+
+/**
+ * Amount from a normalized transcript: explicit digits win ("৫০০"→500,
+ * "120.50"), otherwise the first Bengali number-word in longest-first order
+ * is the base (server parity) — and "হাজার" multiplies it by 1000 ("আট
+ * হাজার" → 8000, "১ হাজার" → 1000). হাজার itself never acts as the base
+ * when another number-word is present, so the multiplier can't square
+ * itself; a bare "হাজার" (no other word) still means 1000. Returns null
+ * when nothing usable is found.
+ */
+function extractAmount(text: string): number | null {
+  const digitMatch = text.match(/(\d+(?:\.\d{1,2})?)/);
+  if (digitMatch) {
+    const n = Number(digitMatch[1]);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return text.includes(THOUSAND_WORD) ? n * THOUSAND_MULT : n;
+  }
+  let base: number | null = null;
+  for (const word of NUMBER_WORDS_ORDERED) {
+    if (word === THOUSAND_WORD) continue;
+    if (text.includes(word)) {
+      base = NUMBER_WORDS[word];
+      break;
+    }
+  }
+  if (base !== null) {
+    return text.includes(THOUSAND_WORD) ? base * THOUSAND_MULT : base;
+  }
+  return text.includes(THOUSAND_WORD) ? NUMBER_WORDS[THOUSAND_WORD] : null;
 }
 
 /**
@@ -81,12 +154,12 @@ export function parseDebtText(raw: string): ParsedDebt | null {
     if (first) party = first;
   }
 
-  // Amount: first number in the sentence (500, 500.50) — thousands commas
-  // are already gone (normalizeTranscript), so "1,250" → 1250.
-  const amtMatch = text.match(/(\d+(?:\.\d{1,2})?)/);
-  if (!party || !amtMatch) return null;
-  const amt = Number(amtMatch[1]);
-  if (!Number.isFinite(amt) || amt <= 0) return null;
+  // Amount: explicit digits first (500, 500.50) — thousands commas are
+  // already gone (normalizeTranscript), so "1,250" → 1250 — otherwise
+  // Bengali number-words ("পাঁচশো টাকা" → 500, "আট হাজার টাকা" → 8000),
+  // same vocabulary as the server voice parser.
+  const amt = extractAmount(text);
+  if (!party || amt === null) return null;
 
   // Note: whatever follows the first comma (e.g. "বাজারের বাকি") of the SAME
   // normalized string — never the raw input's separator commas.
@@ -98,15 +171,13 @@ export function parseDebtText(raw: string): ParsedDebt | null {
 
 /**
  * Extract the monthly budget amount from a transcript (prototype
- * VOICE_CTX.budget): "এই মাসের বাজেট ২৫০০০ টাকা" → "25000". Returns null
- * when no positive number is present — the overlay then keeps the
+ * VOICE_CTX.budget): "এই মাসের বাজেট ২৫০০০ টাকা" → "25000", words included:
+ * "এই মাসের বাজেট আট হাজার টাকা" → "8000". Returns null when no positive
+ * number (digits or number-words) is present — the overlay then keeps the
  * transcript editable instead of saving nonsense.
  */
 export function parseBudgetAmount(raw: string): string | null {
   const text = normalizeTranscript(raw);
-  const m = text.match(/(\d+(?:\.\d{1,2})?)/);
-  if (!m) return null;
-  const n = Number(m[1]);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return String(n);
+  const n = extractAmount(text);
+  return n === null ? null : String(n);
 }

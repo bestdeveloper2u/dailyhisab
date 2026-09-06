@@ -82,6 +82,68 @@ describe("parseDebtText (voice debt parser, on-device)", () => {
 });
 
 /**
+ * Bengali number-word amounts — parity with the server expense voice parser
+ * (apps/api/app/routers/voice.py _NUMBER_WORDS): "করিমকে পাঁচশো টাকা ধার
+ * দিলাম" → 500, "এই মাসের বাজেট আট হাজার টাকা" → 8000.
+ */
+describe("Bengali number-word amounts (server voice.py parity)", () => {
+  it("parses the prototype word-amount debt sentence", () => {
+    expect(parseDebtText("করিমকে পাঁচশো টাকা ধার দিলাম")).toEqual({
+      party: "করিম",
+      dir: "lend",
+      amt: "500",
+      note: "",
+    });
+  });
+
+  it("multiplies a word amount by হাজার (দুই হাজার → 2000)", () => {
+    expect(parseDebtText("রহিম থেকে দুই হাজার টাকা ধার নিলাম")).toEqual({
+      party: "রহিম",
+      dir: "borrow",
+      amt: "2000",
+      note: "",
+    });
+  });
+
+  it("matches longest-first (একশো → 100, not এক → 1)", () => {
+    expect(parseDebtText("করিমকে একশো টাকা দিলাম")?.amt).toBe("100");
+  });
+
+  it("keeps digit precedence and multiplies digits by হাজার (১ হাজার → 1000)", () => {
+    // Server parity: test_parse_thousand_multiplier "বই ১ হাজার" → 1000.
+    expect(parseDebtText("করিমকে ১ হাজার টাকা দিলাম")?.amt).toBe("1000");
+  });
+
+  it("treats a bare হাজার as 1000", () => {
+    expect(parseDebtText("করিমকে হাজার টাকা দিলাম")?.amt).toBe("1000");
+  });
+
+  it("budget parses আট হাজার (the task example)", () => {
+    expect(parseBudgetAmount("এই মাসের বাজেট আট হাজার টাকা")).toBe("8000");
+  });
+
+  it("budget parses পাঁচ হাজার without grabbing হাজার as the base", () => {
+    expect(parseBudgetAmount("এই মাসের বাজেট পাঁচ হাজার টাকা")).toBe("5000");
+  });
+
+  it("budget parses নব্বই হাজার (longest-first: নব্বই → 90)", () => {
+    expect(parseBudgetAmount("এই মাসের বাজেট নব্বই হাজার টাকা")).toBe("90000");
+  });
+
+  it("budget accepts a plain word amount with no multiplier (পঞ্চাশ → 50)", () => {
+    expect(parseBudgetAmount("এই মাসের বাজেট পঞ্চাশ টাকা")).toBe("50");
+  });
+
+  it("budget still combines ASCII digits with হাজার", () => {
+    expect(parseBudgetAmount("এই মাসের বাজেট ২ হাজার টাকা")).toBe("2000");
+  });
+
+  it("returns null when only non-number words appear", () => {
+    expect(parseDebtText("করিমকে ধার দিলাম")).toBeNull();
+  });
+});
+
+/**
  * Prototype VOICE_CTX.budget: "এই মাসের বাজেট ২৫০০০ টাকা" → 25000. No
  * number → null keeps the transcript editable instead of saving nonsense.
  */
