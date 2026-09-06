@@ -188,7 +188,14 @@ export function useExpenseMutations() {
     onSuccess: () => void invalidate(),
   });
   const remove = useMutation({
-    mutationFn: (id: string) => apiDeleteExpense(id, lang),
+    // Throw on ok:false (mirrors create) so a failed DELETE is an actual
+    // mutation error — T22.1's onError toast ("মোছা যায়নি") fires and the
+    // row stays; a bare resolved result would skip every onError callback.
+    mutationFn: async (id: string) => {
+      const res = await apiDeleteExpense(id, lang);
+      if (!res.ok) throw new Error(res.detail || w(lang, "errFallback"));
+      return res;
+    },
     onSuccess: () => void invalidate(),
   });
   const bulkCreate = useMutation({

@@ -58,6 +58,13 @@ function toAmount(raw: string): string | null {
 
 function buildIso(y: number, mo: number, d: number): string | null {
   if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  // Real calendar validity (audit/t22x_audit.md P2-1): the API's pydantic
+  // `iso: date` rejects e.g. 2026-02-31 with a 422 that fails the WHOLE
+  // atomic bulk chunk — reject impossible dates on-device instead.
+  const probe = new Date(y, mo - 1, d);
+  if (probe.getFullYear() !== y || probe.getMonth() !== mo - 1 || probe.getDate() !== d) {
+    return null;
+  }
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -142,7 +149,11 @@ export function parseExpensesCsv(text: string): ImportPreview {
     const amt = toAmount(byKind.amt ?? "");
     const iso = toIsoDate(byKind.iso ?? "");
     const cat = (byKind.cat ?? "").trim();
-    if (!amt || !iso || !cat) {
+    const desc = (byKind.desc ?? "").trim();
+    // Length guards mirror ExpenseIn (apps/api schemas/expense.py: cat ≤80,
+    // desc ≤200) — an over-long row would 422 the WHOLE atomic bulk chunk
+    // (audit/t22x_audit.md P2-1), so skip it on-device like invalid amounts.
+    if (!amt || !iso || !cat || cat.length > 80 || desc.length > 200) {
       skipped += 1;
       continue;
     }
@@ -150,7 +161,7 @@ export function parseExpensesCsv(text: string): ImportPreview {
     const payRaw = (byKind.pay ?? "").trim().toLowerCase();
     items.push({
       iso,
-      desc: (byKind.desc ?? "").trim() || undefined,
+      desc: desc || undefined,
       cat,
       grp: GROUP_BY_LABEL.get(grpRaw) ?? "other",
       pay: PAY_BY_LABEL.get(payRaw) ?? "cash",

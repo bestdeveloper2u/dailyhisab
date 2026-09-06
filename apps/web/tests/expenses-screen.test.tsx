@@ -3,6 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Expenses } from "../src/screens/Expenses";
 import { makeResponse, renderWithProviders, resetLang, stubFetch, type RouteHandler } from "./helpers";
+import { subscribeToasts } from "../src/lib/toast";
 
 const after = () => vi.unstubAllGlobals();
 
@@ -82,7 +83,7 @@ describe("Expenses screen (real API shapes)", () => {
     await waitFor(() => expect(urls.some((s) => s.includes("cursor=CUR1"))).toBe(true));
   });
 
-  it("deletes an expense after the inline confirm step", async () => {
+  it("deletes on a single tap (undo toast replaces the confirm step)", async () => {
     const rows = [
       { id: "keep-1", cat: "চাল", amt: "200.00", iso: "2026-09-04" },
       { id: "del-1", cat: "মাছ", amt: "890.00", iso: "2026-09-04" },
@@ -95,19 +96,23 @@ describe("Expenses screen (real API shapes)", () => {
         },
       }),
     );
+    const toasts: string[] = [];
+    const unsubscribe = subscribeToasts((s) => s && toasts.push(s.text));
     const user = userEvent.setup();
     renderWithProviders(<Expenses />, { route: "/expenses" });
 
     expect(await screen.findByText("মাছ")).toBeInTheDocument();
 
-    // Two-step delete: arm, then confirm.
+    // T22.1: no arm/confirm step anymore — one ✕ tap fires DELETE.
     await user.click(screen.getByRole("button", { name: "মাছ — মুছুন" }));
-    await user.click(screen.getByRole("button", { name: "নিশ্চিত?" }));
+    expect(screen.queryByRole("button", { name: "নিশ্চিত?" })).not.toBeInTheDocument();
 
-    // Invalidation refetches the (now smaller) list.
+    // Invalidation refetches the (now smaller) list, and the undo toast shows.
     await waitFor(() => expect(screen.queryByText("মাছ")).not.toBeInTheDocument());
+    await waitFor(() => expect(toasts).toContain("মোছা হয়েছে"));
     expect(screen.getByText("চাল")).toBeInTheDocument();
     expect(screen.getByText("১ এন্ট্রি")).toBeInTheDocument();
+    unsubscribe();
   });
 
   it("creates an expense from the form with a normalized money string", async () => {

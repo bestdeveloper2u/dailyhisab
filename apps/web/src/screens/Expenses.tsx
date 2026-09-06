@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "react-router";
 import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
-import type { Expense } from "@khoroch/api-client";
+import type { Expense, ExpenseCreateInput } from "@khoroch/api-client";
 import { useExpensesInfinite, useExpenseMutations } from "../lib/queries";
 import {
   dayLabel,
@@ -21,7 +21,7 @@ import { downloadCsv, expensesToCsv } from "../lib/csv";
 import { parseExpensesCsv, type ImportPreview } from "../lib/importCsv";
 import { Modal } from "../components/Modal";
 import { ExpenseForm } from "../components/ExpenseForm";
-import { toast } from "../lib/toast";
+import { toast, toastWithAction } from "../lib/toast";
 import { VoiceOverlay } from "../components/VoiceOverlay";
 import {
   IconDownload,
@@ -66,50 +66,56 @@ function groupByDay(rows: Expense[]): DayGroup[] {
   return groups;
 }
 
-/** Two-step delete: first click arms, second click fires DELETE. */
+/**
+ * T22.1 single-tap delete (NN/g "Confirmation Dialogs"): instead of an
+ * arm→confirm dialog, one ✕ tap deletes immediately and an UNDO toast offers
+ * a ~6s window to re-create the identical row — reversible destruction is
+ * friendlier than a modal, and the row never silently disappears.
+ */
 function DeleteButton({ expense }: { expense: Expense }) {
   const lang = useLangStore((s) => s.lang);
-  const { remove } = useExpenseMutations();
-  const [armed, setArmed] = useState(false);
+  const { remove, create } = useExpenseMutations();
 
-  if (!armed) {
-    return (
-      <button
-        type="button"
-        aria-label={`${expense.cat} — ${w(lang, "remove")}`}
-        onClick={() => setArmed(true)}
-        className="rounded-control p-2 text-muted hover:bg-surface-2 hover:text-danger"
-      >
-        <IconTrash className="h-4 w-4" />
-      </button>
-    );
-  }
   return (
-    <span className="flex items-center gap-1">
-      <button
-        type="button"
-        disabled={remove.isPending}
-        onClick={() =>
-          remove.mutate(expense.id, {
-            onSuccess: () => {
-              setArmed(false);
-              toast(w(lang, "tDeleted"));
-            },
-          })
-        }
-        className="rounded-control bg-danger px-2 py-1.5 text-xs font-bold text-accent-ink disabled:opacity-60"
-      >
-        {w(lang, "confirmDelete")}
-      </button>
-      <button
-        type="button"
-        onClick={() => setArmed(false)}
-        aria-label={w(lang, "cancel")}
-        className="rounded-control px-1.5 py-1.5 text-xs font-semibold text-muted hover:bg-surface-2"
-      >
-        ✕
-      </button>
-    </span>
+    <button
+      type="button"
+      disabled={remove.isPending}
+      aria-label={`${expense.cat} — ${w(lang, "remove")}`}
+      onClick={() => {
+        // Capture the FULL row payload BEFORE the delete request leaves —
+        // undo must re-create the exact amount/date/group/method/note.
+        const undoPayload: ExpenseCreateInput = {
+          amt: expense.amt,
+          cat: expense.cat,
+          grp: expense.grp,
+          pay: expense.pay,
+          iso: expense.iso,
+          desc: expense.desc ?? null,
+        };
+        remove.mutate(expense.id, {
+          onSuccess: () => {
+            toastWithAction(w(lang, "tDeletedUndo"), {
+              label: w(lang, "undo"),
+              onClick: () => {
+                create
+                  .mutateAsync(undoPayload)
+                  .then(() => toast(w(lang, "tRestored")))
+                  // create's onError already toasts tSaveErr; this replaces it
+                  // with an undo-specific message a beat later.
+                  .catch(() => toast(w(lang, "tRestoreFailed")));
+              },
+            });
+          },
+          onError: () => {
+            // Delete failed → nothing changed, row stays, say so.
+            toast(w(lang, "tDeleteFailed"));
+          },
+        });
+      }}
+      className="rounded-control p-2 text-muted hover:bg-surface-2 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <IconTrash className="h-4 w-4" />
+    </button>
   );
 }
 
@@ -198,20 +204,45 @@ export function Expenses() {
     }
   }
 
-  /** Confirm import: save in 100-row batches, then one final toast. */
+  /**
+   * Confirm import: save in chunks, then one final toast.
+   * Chunk size MUST match the bulk endpoint cap (apps/api schemas/expense.py:
+   * BulkExpensesIn.items max_length=50) — chunking larger silently 422s the
+   * whole chunk and imports 0 rows (audit/t22x_audit.md P1-1).
+   */
   async function confirmImport() {
     if (!importPreview || bulkCreate.isPending) return;
+    const total = importPreview.items.length;
+    const BULK_CHUNK = 50;
     let saved = 0;
-    for (let i = 0; i < importPreview.items.length; i += 100) {
+    let failed = false;
+    for (let i = 0; i < total; i += BULK_CHUNK) {
       try {
-        const res = await bulkCreate.mutateAsync(importPreview.items.slice(i, i + 100));
-        if (!res.ok) break;
+        const res = await bulkCreate.mutateAsync(importPreview.items.slice(i, i + BULK_CHUNK));
+        if (!res.ok) {
+          failed = true;
+          break;
+        }
         saved += res.data.length;
       } catch {
+        failed = true;
         break;
       }
     }
     setImportPreview(null);
+    if (failed && saved === 0) {
+      // P3-1 (audit t22x): a failure must never wear the ✓ success glyph.
+      toast(w(lang, "importFail"));
+      return;
+    }
+    if (failed) {
+      toast(
+        lang === "bn"
+          ? `⚠ ${toBnDigits(String(saved))} ${w(lang, "importDone")} — ${toBnDigits(String(total - saved))} ${w(lang, "importPartial")}`
+          : `⚠ ${saved} ${w(lang, "importDone")} — ${total - saved} ${w(lang, "importPartial")}`,
+      );
+      return;
+    }
     toast(
       lang === "bn"
         ? `✓ ${toBnDigits(String(saved))} ${w(lang, "importDone")}`

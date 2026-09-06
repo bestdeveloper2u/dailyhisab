@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { currentToast, subscribeToasts, type ToastState } from "../lib/toast";
+import { currentToast, dismissToast, subscribeToasts, type ToastState } from "../lib/toast";
 
 /**
  * Prototype-faithful toast UI (www/index.html #toast @977 + CSS @380-412):
  * fixed bottom-center pill (above the mobile tab bar, 34px on desktop).
  * The live region stays mounted so screen readers hear messages on change.
  * Mount ONCE, in the app shell.
+ *
+ * T22.1: an action toast renders its action as a button INSIDE the same live
+ * region — it never steals focus (no autofocus), and clicking it dismisses
+ * the toast before running the callback so any follow-up toast survives.
  */
 export function ToastHost() {
   const [state, setState] = useState<ToastState | null>(currentToast());
@@ -24,6 +28,20 @@ export function ToastHost() {
       }`}
     >
       {state?.text ?? ""}
+      {state?.action && (
+        <button
+          type="button"
+          onClick={() => {
+            const action = state.action;
+            if (!action) return;
+            dismissToast(state.id);
+            action.onClick();
+          }}
+          className="pointer-events-auto ml-2.5 rounded-full bg-ivory/15 px-2.5 py-1 text-xs font-bold text-ivory transition-colors hover:bg-ivory/25"
+        >
+          {state.action.label}
+        </button>
+      )}
     </div>
   );
 }

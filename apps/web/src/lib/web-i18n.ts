@@ -51,6 +51,10 @@ export const W = {
     txCount: "লেনদেন",
     noBudget: "বাজেট সেট করা নেই",
     viewAll: "সব দেখুন",
+    // dashboard empty-CTA (prototype emptyCta @1196 — T22.2 parity)
+    emptyToday: "আজ কোনো খরচ হয়নি",
+    addNow: "✏️ এখনই যোগ করুন",
+    voiceNow: "🎙 বলে যোগ করুন",
     // voice — speech error guidance (owner: "too many issues", silent failures)
     voiceMicPerm: "মাইক্রোফোনের অনুমতি দিন — ব্রাউজারের ঠিকানার পাশে মাইক আইকন থেকে অনুমতি চালু করুন",
     voiceMicMissing: "মাইক্রোফোন পাওয়া যাচ্ছে না — ডিভাইসে মাইক যুক্ত আছে কি না দেখুন",
@@ -93,6 +97,8 @@ export const W = {
     importGo: "সব যোগ করুন",
     importNone: "কোনো সঠিক খরচ পাওয়া যায়নি — এক্সপোর্ট করা CSV-এর কলাম-ক্রম মিলিয়ে নিন",
     importDone: "টি আমদানি হয়েছে",
+    importFail: "আমদানি ব্যর্থ — কোনো সারি সংরক্ষিত হয়নি",
+    importPartial: "টি বাকি আছে — আবার চেষ্টা করলে সংরক্ষিত সারিগুলো ডুপ্লিকেট হবে",
     voiceBudgetTitle: "ভয়েসে বাজেট সেট করুন",
     voiceBudgetHint: "যেমন — এই মাসের বাজেট ২৫০০০ টাকা",
     voiceBudgetSaved: "বাজেট সেট হয়েছে",
@@ -188,6 +194,12 @@ export const W = {
     profileSettings: "প্রোফাইল ও সেটিংস",
     // toasts + CSV export (prototype toast messages / csvBtn @1358)
     tDeleted: "মুছে ফেলা হয়েছে ✓",
+    // T22.1 single-tap delete + undo toast (NN/g Confirmation Dialogs)
+    tDeletedUndo: "মোছা হয়েছে",
+    undo: "ফিরিয়ে আনুন",
+    tRestored: "ফিরিয়ে আনো হয়েছে",
+    tDeleteFailed: "মোছা যায়নি",
+    tRestoreFailed: "ফিরিয়ে আনা যায়নি",
     csvStarted: "CSV ফাইল তৈরি হচ্ছে…",
     csvDone: "CSV ডাউনলোড হয়েছে ✓",
     csvLabel: "CSV",
@@ -299,6 +311,10 @@ export const W = {
     txCount: "Transactions",
     noBudget: "No budget set",
     viewAll: "View all",
+    // dashboard empty-CTA (prototype emptyCta @1196 — T22.2 parity)
+    emptyToday: "No expenses yet today",
+    addNow: "✏️ Add now",
+    voiceNow: "🎙 Speak to add",
     // voice — speech error guidance (owner: "too many issues", silent failures)
     voiceMicPerm: "Allow microphone access — use the mic icon next to the browser address bar",
     voiceMicMissing: "No microphone found — check that a mic is connected",
@@ -341,6 +357,8 @@ export const W = {
     importGo: "Add all",
     importNone: "No valid expenses found — match the column order of an exported CSV",
     importDone: "imported",
+    importFail: "Import failed — no rows were saved",
+    importPartial: "rows remain — retrying would duplicate the saved rows",
     voiceBudgetTitle: "Set budget by voice",
     voiceBudgetHint: "e.g. — this month's budget is 25000 taka",
     voiceBudgetSaved: "Budget saved",
@@ -436,6 +454,12 @@ export const W = {
     profileSettings: "Profile & settings",
     // toasts + CSV export (prototype toast messages / csvBtn @1358)
     tDeleted: "Deleted ✓",
+    // T22.1 single-tap delete + undo toast (NN/g Confirmation Dialogs)
+    tDeletedUndo: "Deleted",
+    undo: "Undo",
+    tRestored: "Restored",
+    tDeleteFailed: "Delete failed",
+    tRestoreFailed: "Could not restore",
     csvStarted: "Preparing CSV…",
     csvDone: "CSV downloaded ✓",
     csvLabel: "CSV",
