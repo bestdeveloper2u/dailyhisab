@@ -19,13 +19,18 @@ segment yields at most one expense candidate:
 """
 
 import re
+import uuid as uuid_mod
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
+from app.db.session import get_db
+from app.models.expense import Expense
 from app.models.profile import Profile
 from app.schemas.expense import (
     ExpenseGroup,
@@ -38,6 +43,7 @@ from app.schemas.expense import (
 router = APIRouter(prefix="/voice", tags=["voice"])
 
 CurrentUser = Annotated[Profile, Depends(get_current_user)]
+DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 # --- normalization ----------------------------------------------------------
 
@@ -220,15 +226,19 @@ def _strip_amount_text(seg: str) -> str:
     return _WS.sub(" ", cleaned)
 
 
-def _match_category(seg: str) -> tuple[str, ExpenseGroup]:
+def _match_category(
+    seg: str, extra: list[tuple[str, ExpenseGroup]] | None = None
+) -> tuple[str, ExpenseGroup]:
     """Longest keyword hit wins → ``(cat, grp)``; otherwise ``("other", "other")``.
 
     Longest-first matters more than list order now: "চাল" (rice) must beat
     "চা" (tea) even though "চা" is a substring of "চাল" and sits earlier in
-    the list. Ties on length keep the earlier list entry.
+    the list. Ties on length keep the earlier list entry. ``extra`` carries
+    the caller's history-derived khatas (ADR-0019) so ANY khata the user has
+    used before is recognised without touching this static list.
     """
     best: tuple[str, ExpenseGroup] | None = None
-    for keyword, grp in _KEYWORDS:
+    for keyword, grp in [*_KEYWORDS, *(extra or [])]:
         if keyword in seg and (best is None or len(keyword) > len(best[0])):
             best = (keyword, grp)
     if best is not None:
@@ -245,7 +255,35 @@ def _match_pay(seg: str) -> PayMethod | None:
     return best
 
 
-def _parse_segment(seg: str, today: date) -> tuple[ParsedItem, float] | None:
+async def _user_khatas(
+    db: AsyncSession, user_id: uuid_mod.UUID
+) -> list[tuple[str, ExpenseGroup]]:
+    """Distinct ``(cat, grp)`` pairs from the caller's history (ADR-0019)."""
+    rn = (
+        func.row_number()
+        .over(
+            partition_by=Expense.cat,
+            order_by=(Expense.iso.desc(), Expense.created_at.desc(), Expense.id.desc()),
+        )
+        .label("rn")
+    )
+    ranked = (
+        select(Expense.cat.label("cat"), Expense.grp.label("grp"), rn)
+        .where(Expense.user_id == user_id)
+        .subquery()
+    )
+    rows = (
+        (await db.execute(select(ranked.c.cat, ranked.c.grp).where(ranked.c.rn == 1)))
+        .all()
+    )
+    return [(row.cat, cast(ExpenseGroup, row.grp)) for row in rows]
+
+
+def _parse_segment(
+    seg: str,
+    today: date,
+    extra: list[tuple[str, ExpenseGroup]] | None = None,
+) -> tuple[ParsedItem, float] | None:
     """Parse one segment; ``None`` when it carries no amount (skip it)."""
     normalized = seg.strip()
     if not normalized:
@@ -253,7 +291,7 @@ def _parse_segment(seg: str, today: date) -> tuple[ParsedItem, float] | None:
     amount, explicit_digits = _extract_amount(normalized)
     if amount is None:
         return None
-    cat, grp = _match_category(_strip_amount_text(normalized))
+    cat, grp = _match_category(_strip_amount_text(normalized), extra)
     confidence = (
         (_CONF_KEYWORD_DIGITS if grp != "other" else _CONF_DIGITS_ONLY)
         if explicit_digits
@@ -273,13 +311,21 @@ def _parse_segment(seg: str, today: date) -> tuple[ParsedItem, float] | None:
 
 
 @router.post("/parse", response_model=VoiceParseOut)
-async def parse_transcript(body: VoiceParseIn, user: CurrentUser) -> VoiceParseOut:
-    """Rule-parse a Bengali voice transcript into expense candidates."""
+async def parse_transcript(
+    body: VoiceParseIn, user: CurrentUser, db: DbDep
+) -> VoiceParseOut:
+    """Rule-parse a Bengali voice transcript into expense candidates.
+
+    The keyword matcher is extended with the caller's history-derived khatas
+    (ADR-0019) — every khata the user has ever saved is recognised on the
+    next transcript, free of any AI/token cost. Pure SQL + rules.
+    """
     today = datetime.now(UTC).date()
+    extra = await _user_khatas(db, user.id)
     items: list[ParsedItem] = []
     confidences: list[float] = []
     for seg in _SEG_SPLIT.split(_normalize(body.text)):
-        parsed = _parse_segment(seg, today)
+        parsed = _parse_segment(seg, today, extra)
         if parsed is not None:
             items.append(parsed[0])
             confidences.append(parsed[1])

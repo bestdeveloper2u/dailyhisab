@@ -69,6 +69,40 @@ async def test_parse_tea_still_tea_and_groceries(client: AsyncClient) -> None:
     assert all(i["grp"] == "food" for i in items)
 
 
+async def test_parser_learns_khata_from_history(client: AsyncClient) -> None:
+    """Zero-AI learning loop: a saved khata is recognised on the next parse.
+
+    Owner asked for a non-static parser without any AI/token cost — the
+    history-derived khatas (ADR-0019) feed the keyword matcher, so a khata
+    that is NOT in the static list ('চিনি') becomes recognisable the moment
+    it has been used once.
+    """
+    headers, _ = await register_user(client, email="voice5@test.dev")
+
+    # Before any history: unknown khata → "other".
+    r = await client.post(VOICE, json={"text": "চিনি ১৫০"}, headers=headers)
+    assert r.status_code == 200, r.text
+    first = r.json()["items"][0]
+    assert first["cat"] == "other"
+
+    # Save one expense with that khata (manual add)…
+    saved = await client.post(
+        "/api/v1/expenses",
+        json={"cat": "চিনি", "grp": "food", "amt": "150.00", "iso": "2026-09-01"},
+        headers=headers,
+    )
+    assert saved.status_code == 201, saved.text
+
+    # …and the parser now recognises it, with the group it was saved under.
+    r = await client.post(VOICE, json={"text": "চিনি ১৫০"}, headers=headers)
+    assert r.status_code == 200, r.text
+    learned = r.json()["items"][0]
+    assert learned["cat"] == "চিনি"
+    assert learned["grp"] == "food"
+    assert learned["amt"] == "150.00"
+    assert r.json()["confidence"] == 0.95
+
+
 async def test_parse_digits_only_is_other(client: AsyncClient) -> None:
     headers, _ = await register_user(client, email="voice3@test.dev")
     r = await client.post(VOICE, json={"text": "৫০"}, headers=headers)
