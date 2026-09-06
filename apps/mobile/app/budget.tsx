@@ -20,6 +20,7 @@ import {
   type BudgetCatUsage,
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
+import { hapticSuccess, hapticWarning } from "../lib/haptics";
 import { useAuth } from "../lib/auth";
 import { usePrefs } from "../lib/prefs";
 import { STRINGS } from "../lib/strings";
@@ -99,6 +100,7 @@ export default function BudgetScreen() {
   // Save feedback (T15.2): both the monthly-limit and per-category save
   // paths land here — one themed toast replaces the old inline flash note.
   const flashSaved = useCallback(() => {
+    void hapticSuccess(); // T26.3 — both save paths land here
     toast(t("toastBudgetSaved"));
   }, [t, toast]);
 
@@ -171,6 +173,7 @@ export default function BudgetScreen() {
       flashSaved();
     } catch (err) {
       setLimitError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setLimitPending(false);
     }
@@ -195,6 +198,7 @@ export default function BudgetScreen() {
     const normalized = catText.trim().replace(/^৳\s*/, "");
     if (!AMOUNT_RE.test(normalized) || Number(normalized) <= 0) {
       setCatError(STRINGS.bn.errBudgetLimit);
+      void hapticWarning(); // T26.3
       return;
     }
     setCatPending(true);
@@ -208,6 +212,7 @@ export default function BudgetScreen() {
       flashSaved();
     } catch (err) {
       setCatError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setCatPending(false);
     }

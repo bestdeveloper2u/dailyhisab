@@ -26,6 +26,7 @@ import {
   type RecurringFreq,
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
+import { hapticSuccess, hapticWarning } from "../lib/haptics";
 import { useAuth } from "../lib/auth";
 import { usePrefs } from "../lib/prefs";
 import { GROUP_LABELS, MONTH_NAMES, PAY_LABELS, STRINGS } from "../lib/strings";
@@ -200,9 +201,11 @@ export default function RecurringScreen() {
       setStartDate(todayIso());
       setShowAdd(false);
       toast(t("toastRecurringAdded"));
+      void hapticSuccess(); // T26.3
       await load(false);
     } catch (err) {
       setFormError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setPending(false);
     }
@@ -229,6 +232,7 @@ export default function RecurringScreen() {
         ),
       );
       setRowError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setTogglingId(null);
     }
@@ -244,8 +248,10 @@ export default function RecurringScreen() {
       setDeleteConfirmId(null);
       setItems((prev) => prev.filter((row) => row.id !== item.id));
       toast(t("toastRecurringDeleted"));
+      void hapticWarning(); // T26.3 — delete confirmed
     } catch (err) {
       setRowError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setDeletingId(null);
     }
@@ -266,6 +272,7 @@ export default function RecurringScreen() {
             : String(result.created);
         setRunNote(`${count} ${t("toastRecurringRunSuffix")}`);
         toast(`${count} ${t("toastRecurringRunSuffix")}`);
+        void hapticSuccess(); // T26.3 — catch-up expenses created
       } else {
         setRunNote(null);
         toast(t("toastRecurringRunZero"));
@@ -273,6 +280,7 @@ export default function RecurringScreen() {
       await load(false);
     } catch (err) {
       setRowError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setRunPending(false);
     }

@@ -22,6 +22,7 @@ import {
   type DebtStatusFilter,
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
+import { hapticSuccess, hapticWarning } from "../lib/haptics";
 import { useAuth } from "../lib/auth";
 import { usePrefs } from "../lib/prefs";
 import { STRINGS } from "../lib/strings";
@@ -234,6 +235,7 @@ export default function Debts() {
       await loadFirstPage(status, false);
     } catch (err) {
       setFormError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setPending(false);
     }
@@ -258,10 +260,12 @@ export default function Debts() {
       setPayId(null);
       setPayAmt("");
       toast(t("toastDebtPaid"));
+      void hapticSuccess(); // T26.3
       // FULL removes the row from ?status=open; just refetch the current view.
       await loadFirstPage(status, false);
     } catch (err) {
       setPayError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setPayPending(false);
     }

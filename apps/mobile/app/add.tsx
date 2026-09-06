@@ -34,6 +34,7 @@ import {
   type PayMethod,
 } from "../lib/api";
 import { describeApiError } from "../lib/errors";
+import { hapticSuccess, hapticWarning } from "../lib/haptics";
 import { useAuth } from "../lib/auth";
 import {
   clearExpenseDraft,
@@ -591,10 +592,12 @@ export default function AddExpense() {
       cancelDraftSave();
       await clearExpenseDraft();
       toast(t("toastVoiceSaved"));
+      void hapticSuccess(); // T26.3
       router.back(); // list/dashboard reload on focus
     } catch (err) {
       setVoiceError(describeApiError(err));
       resetVoiceSheet();
+      void hapticWarning(); // T26.3
     } finally {
       setVoiceSaving(false);
     }
@@ -664,6 +667,7 @@ export default function AddExpense() {
         if (hit) {
           dupSigRef.current = `${amount}|${cat}|${iso}`;
           setDupExisting(hit);
+          void hapticWarning(); // T26.3 — duplicate re-add needs explicit confirm
           return; // finally unlocks the form; warning + confirm button show
         }
       }
@@ -680,9 +684,11 @@ export default function AddExpense() {
       cancelDraftSave();
       await clearExpenseDraft();
       toast(t("toastExpenseAdded"));
+      void hapticSuccess(); // T26.3
       router.back(); // list reloads on focus
     } catch (err) {
       setError(describeApiError(err));
+      void hapticWarning(); // T26.3
     } finally {
       setPending(false);
     }
