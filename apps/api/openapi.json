@@ -1732,7 +1732,7 @@
   },
   "info": {
     "title": "Daily Hisab API",
-    "version": "0.15.0"
+    "version": "0.16.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3211,7 +3211,7 @@
     },
     "/api/v1/voice/parse": {
       "post": {
-        "description": "Rule-parse a Bengali voice transcript into expense candidates.",
+        "description": "Rule-parse a Bengali voice transcript into expense candidates.\n\nThe keyword matcher is extended with the caller's history-derived khatas\n(ADR-0019) \u2014 every khata the user has ever saved is recognised on the\nnext transcript, free of any AI/token cost. Pure SQL + rules.",
         "operationId": "parse_transcript_api_v1_voice_parse_post",
         "requestBody": {
           "content": {

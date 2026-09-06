@@ -580,6 +580,10 @@ export interface paths {
         /**
          * Parse Transcript
          * @description Rule-parse a Bengali voice transcript into expense candidates.
+         *
+         *     The keyword matcher is extended with the caller's history-derived khatas
+         *     (ADR-0019) — every khata the user has ever saved is recognised on the
+         *     next transcript, free of any AI/token cost. Pure SQL + rules.
          */
         post: operations["parse_transcript_api_v1_voice_parse_post"];
         delete?: never;
