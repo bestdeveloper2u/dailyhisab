@@ -32,6 +32,11 @@ vi.mock("../lib/queries", () => ({
     create: { isPending: false, mutateAsync: createMock },
     update: { isPending: false, mutateAsync: updateMock },
   }),
+  // T20.4: the form also consumes the khata-categories query now; these
+  // tests never exercise suggestions, so hand back a settled empty list.
+  useKhataCategories: () => ({
+    data: { ok: true as const, data: { items: [], next_cursor: null } },
+  }),
 }));
 
 const DRAFT: ExpenseDraft = {

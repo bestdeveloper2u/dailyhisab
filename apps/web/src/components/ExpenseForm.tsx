@@ -1,15 +1,17 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { t } from "@khoroch/core";
-import type { Expense, ExpenseGroup, PayMethod } from "@khoroch/api-client";
-import { useExpenseMutations } from "../lib/queries";
+import type { Expense, ExpenseGroup, Khata, PayMethod } from "@khoroch/api-client";
+import { useExpenseMutations, useKhataCategories } from "../lib/queries";
 import {
   BUMP_STEPS,
   GROUP_LABELS,
   GROUP_ORDER,
+  groupName,
   PAY_LABELS,
   bumpAmount,
   normalizeAmount,
   todayIso,
+  yesterdayIso,
 } from "../lib/catalog";
 import { normalizeAmountInput } from "../lib/num";
 import {
@@ -25,6 +27,13 @@ import { Modal } from "./Modal";
 
 const inputClass =
   "w-full rounded-control border border-line bg-ivory px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 focus:border-emerald focus:outline-none";
+
+/** APG combobox: at most 8 history-derived suggestions (ADR-0019). */
+const KHATA_MATCH_LIMIT = 8;
+const CAT_LISTBOX_ID = "exp-cat-listbox";
+const catOptionId = (index: number) => `exp-cat-option-${index}`;
+/** Stable empty list so the `matches` memo never churns on a failed fetch. */
+const NO_KHATAS: Khata[] = [];
 
 interface ExpenseFormProps {
   open: boolean;
@@ -51,6 +60,42 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
   const [error, setError] = useState<string | null>(null);
 
   const pending = create.isPending || update.isPending;
+
+  // T20.4 — history-derived khata suggestions (ADR-0019). A failed/empty
+  // list degrades to no suggestions at all: the popup never renders and the
+  // form keeps working exactly as before (silent fail by design).
+  const categoriesQuery = useKhataCategories();
+  const khatas = categoriesQuery.data?.ok
+    ? categoriesQuery.data.data.items
+    : NO_KHATAS;
+  const [catListOpen, setCatListOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // Case-insensitive substring match over the fetched khatas, API order
+  // preserved (most-used → most-recent → cat), capped at 8.
+  const catQuery = cat.trim().toLowerCase();
+  const matches = useMemo(
+    () =>
+      catQuery === ""
+        ? []
+        : khatas
+            .filter((k) => k.cat.toLowerCase().includes(catQuery))
+            .slice(0, KHATA_MATCH_LIMIT),
+    [khatas, catQuery],
+  );
+
+  // The popup exists only while the user typed something AND there are
+  // matches: a restored draft (T19.2) fills state without ever opening it.
+  const popupOpen = catListOpen && matches.length > 0;
+  const active = popupOpen ? Math.min(activeIdx, matches.length - 1) : -1;
+
+  /** Pick a suggestion: fill খাত + the khata's most-recent group (ADR-0019). */
+  function applyKhata(khata: Khata) {
+    setCat(khata.cat);
+    setGrp(khata.grp);
+    setCatListOpen(false);
+    setActiveIdx(0);
+  }
 
   // T19.2 draft autosave — CREATE mode only; edit mode never reads or
   // writes the draft (the form remounts per target via `key`, so the
@@ -123,24 +168,26 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
       }
       setError(res.detail || w(lang, "errFallback"));
     } else {
-      const res = await create.mutateAsync({
-        amt: amtStr,
-        cat: catTrimmed,
-        grp,
-        pay,
-        iso,
-        desc: desc.trim() || null,
-      });
-      if (res.ok) {
+      // T20.2 optimistic create: the row is already in the list cache (see
+      // useExpenseMutations); a server rejection throws here after rollback.
+      try {
+        await create.mutateAsync({
+          amt: amtStr,
+          cat: catTrimmed,
+          grp,
+          pay,
+          iso,
+          desc: desc.trim() || null,
+        });
         clearExpenseDraft(); // T19.2: a saved expense is no longer a draft
         setAmt("");
         setCat("");
         setDesc("");
-        toast(t(lang, "savedCheck"));
+        toast(w(lang, "tSaved"));
         onClose();
-        return;
+      } catch (err) {
+        setError(err instanceof Error && err.message ? err.message : w(lang, "errFallback"));
       }
-      setError(res.detail || w(lang, "errFallback"));
     }
   }
 
@@ -203,7 +250,7 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
+          <div className="relative flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted" htmlFor="exp-cat">
               {w(lang, "catLabel")}
             </label>
@@ -214,10 +261,77 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
               required
               maxLength={80}
               value={cat}
-              onChange={(e) => setCat(e.target.value)}
+              role="combobox"
+              autoComplete="off"
+              aria-expanded={popupOpen}
+              aria-controls={popupOpen ? CAT_LISTBOX_ID : undefined}
+              aria-autocomplete="list"
+              aria-activedescendant={popupOpen ? catOptionId(active) : undefined}
+              onChange={(e) => {
+                setCat(e.target.value);
+                setActiveIdx(0);
+                setCatListOpen(true); // typing (re)opens; state fills never do
+              }}
+              onKeyDown={(e) => {
+                if (!popupOpen) return; // closed: Escape/Enter keep modal/submit semantics
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setActiveIdx(Math.min(active + 1, matches.length - 1));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActiveIdx(Math.max(active - 1, 0));
+                } else if (e.key === "Enter") {
+                  const pick = matches[active];
+                  if (pick) {
+                    e.preventDefault(); // picking a suggestion never submits
+                    applyKhata(pick);
+                  }
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  // Close only the popup: the Modal listens for Escape on
+                  // `window`, so stop the event before it gets there or the
+                  // whole dialog would close.
+                  e.stopPropagation();
+                  setCatListOpen(false);
+                } else if (e.key === "Tab") {
+                  setCatListOpen(false); // focus moves on, popup follows
+                }
+              }}
+              onBlur={() => setCatListOpen(false)}
               placeholder={w(lang, "catPh")}
               className={inputClass}
             />
+            {popupOpen && (
+              <ul
+                id={CAT_LISTBOX_ID}
+                role="listbox"
+                aria-label={w(lang, "khataSuggestionsLabel")}
+                className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-control border border-line bg-surface py-1 shadow-card"
+              >
+                {matches.map((k, i) => (
+                  <li
+                    key={k.cat}
+                    id={catOptionId(i)}
+                    role="option"
+                    aria-selected={i === active}
+                    onMouseDown={(e) => {
+                      // Selection must land before the input's blur hides
+                      // the popup — preventDefault keeps focus in the input.
+                      e.preventDefault();
+                      applyKhata(k);
+                    }}
+                    className={`flex cursor-pointer items-center justify-between gap-2 px-3.5 py-2 text-sm text-ink ${
+                      i === active ? "bg-surface-2 font-semibold" : ""
+                    }`}
+                  >
+                    <span className="truncate">{k.cat}</span>{" "}
+                    <span className="shrink-0 text-xs text-muted">
+                      {groupName(k.grp, lang)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-muted" htmlFor="exp-grp">
@@ -271,6 +385,26 @@ export function ExpenseForm({ open, onClose, expense }: ExpenseFormProps) {
               onChange={(e) => setIso(e.target.value)}
               className={inputClass}
             />
+            {/* আজ/গতকাল quick-date chips (prototype datechips @797-799, T20.2). */}
+            <div role="group" aria-label={w(lang, "dateChipsLabel")} className="flex gap-1.5">
+              <button
+                type="button"
+                aria-pressed={iso === todayIso()}
+                onClick={() => setIso(todayIso())}
+                className="rounded-full border border-line bg-surface px-3.5 py-1 text-[13px] font-semibold text-muted transition-colors hover:border-emerald hover:text-emerald aria-pressed:border-emerald aria-pressed:bg-emerald aria-pressed:text-accent-ink"
+              >
+                {w(lang, "dayToday")}
+              </button>
+              <button
+                type="button"
+                aria-pressed={iso === yesterdayIso()}
+                onClick={() => setIso(yesterdayIso())}
+                className="rounded-full border border-line bg-surface px-3.5 py-1 text-[13px] font-semibold text-muted transition-colors hover:border-emerald hover:text-emerald aria-pressed:border-emerald aria-pressed:bg-emerald aria-pressed:text-accent-ink"
+              >
+                {w(lang, "dayYesterday")}
+              </button>
+            </div>
+            <p className="px-1 text-xs text-muted">{w(lang, "dateHint")}</p>
           </div>
         </div>
 

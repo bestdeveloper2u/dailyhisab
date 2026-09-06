@@ -139,6 +139,16 @@ export function todayIso(): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Local-side YYYY-MM-DD for "yesterday" (আজ/গতকাল quick-date chips, T20.2). */
+export function yesterdayIso(): string {
+  const now = new Date();
+  now.setDate(now.getDate() - 1);
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** "2026-09-04" → "2026-09" (month key). */
 export const ymOfIso = (iso: string): string => iso.slice(0, 7);
 

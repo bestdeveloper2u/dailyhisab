@@ -307,6 +307,23 @@ export async function apiListExpenses(
   return { ok: false, status: response.status, detail: errorMessage(error, lang) };
 }
 
+/** One distinct khata derived from the caller's history (ADR-0019). */
+export type Khata = components["schemas"]["KhataOut"];
+/** Envelope for GET /expenses/categories — picker-sized, cursor always null. */
+export type KhataListOut = components["schemas"]["KhataListOut"];
+
+/**
+ * Distinct khatas for the expense-form picker (ADR-0019): one row per cat,
+ * ordered most-used → most-recent → cat. Unpaginated by design.
+ */
+export async function apiListCategories(
+  lang: Lang = "bn",
+): Promise<ApiResult<KhataListOut>> {
+  const { data, error, response } = await api.GET("/api/v1/expenses/categories");
+  if (data) return { ok: true, data };
+  return { ok: false, status: response.status, detail: errorMessage(error, lang) };
+}
+
 export async function apiCreateExpense(
   body: ExpenseCreateInput,
   lang: Lang = "bn",

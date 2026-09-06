@@ -18,6 +18,7 @@ import {
   apiDeleteExpense,
   apiDeleteRecurring,
   apiGetBudget,
+  apiListCategories,
   apiListDebts,
   apiListExpenses,
   apiListRecurring,
@@ -43,6 +44,8 @@ import {
   type RecurringUpdateInput,
 } from "@khoroch/api-client";
 import { useLangStore } from "../store/lang";
+import { toast } from "../lib/toast";
+import { w } from "../lib/web-i18n";
 
 export interface ExpenseFilters {
   q?: string;
@@ -52,6 +55,18 @@ export interface ExpenseFilters {
   pageLimit?: number;
 }
 
+/** Infinite-query cache shape for the expenses list (useExpensesInfinite).
+ *  Pages are RAW api-client results — {ok, data:{items,next_cursor}} — because
+ *  the queryFn returns the helper result untouched (T20.2 regression fix). */
+interface ExpenseListPage {
+  ok: boolean;
+  data?: { items: Expense[]; next_cursor: string | null };
+}
+interface ExpenseListData {
+  pages: ExpenseListPage[];
+  pageParams: unknown[];
+}
+
 export const qk = {
   expenses: (filters: ExpenseFilters) => ["expenses", "list", filters] as const,
   monthly: (ym: string, lang: Lang) => ["reports", "monthly", ym, lang] as const,
@@ -59,6 +74,7 @@ export const qk = {
   debts: (status: DebtStatus) => ["debts", "list", status] as const,
   budget: (ym: string, lang: Lang) => ["budgets", ym, lang] as const,
   recurring: (filter: RecurringFilter) => ["recurring", "list", filter] as const,
+  khataCategories: ["khata", "categories"] as const,
 };
 
 /** Keyset-paginated expense list (`{items, next_cursor}` per page). */
@@ -96,6 +112,20 @@ export function useYearlyReport(year: number) {
   });
 }
 
+/**
+ * History-derived khata list for the expense-form picker (ADR-0019). The set
+ * is bounded by the user's own distinct cats and is cheap to re-read, so a
+ * 5-minute staleTime keeps it out of the hot path entirely.
+ */
+export function useKhataCategories() {
+  const lang = useLangStore((s) => s.lang);
+  return useQuery({
+    queryKey: qk.khataCategories,
+    queryFn: () => apiListCategories(lang),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 /** All create/update/delete mutations invalidate the touched caches. */
 export function useExpenseMutations() {
   const lang = useLangStore((s) => s.lang);
@@ -105,9 +135,52 @@ export function useExpenseMutations() {
     await qc.invalidateQueries({ queryKey: ["reports"] });
   };
 
+  // T20.2 optimistic create (TanStack Query v5 pattern): the new row is
+  // prepended to every cached expenses list the moment the request leaves —
+  // instant feedback on slow networks — and rolled back from the snapshot if
+  // the server rejects it. Edit/delete stay non-optimistic.
   const create = useMutation({
-    mutationFn: (body: ExpenseCreateInput) => apiCreateExpense(body, lang),
-    onSuccess: () => void invalidate(),
+    mutationFn: async (body: ExpenseCreateInput) => {
+      const res = await apiCreateExpense(body, lang);
+      if (!res.ok) throw new Error(res.detail || w(lang, "errFallback"));
+      return res;
+    },
+    onMutate: async (body: ExpenseCreateInput) => {
+      await qc.cancelQueries({ queryKey: ["expenses"] });
+      const previous = qc.getQueriesData<ExpenseListData>({ queryKey: ["expenses", "list"] });
+      const optimistic: Expense = {
+        id: `temp-${crypto.randomUUID()}`,
+        user_id: "optimistic",
+        amt: body.amt,
+        cat: body.cat,
+        grp: body.grp,
+        pay: body.pay,
+        desc: body.desc ?? null,
+        iso: body.iso,
+        created_at: new Date().toISOString(),
+      };
+      qc.setQueriesData<ExpenseListData>({ queryKey: ["expenses", "list"] }, (old) => {
+        const firstPage = old?.pages?.[0];
+        const pageData = firstPage?.data;
+        if (!old || !firstPage || !pageData) return old; // error/empty states — nothing to prepend to
+        return {
+          ...old,
+          pages: [
+            {
+              ...firstPage,
+              data: { ...pageData, items: [optimistic, ...pageData.items] },
+            },
+            ...old.pages.slice(1),
+          ],
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _body, ctx) => {
+      if (ctx) for (const [key, data] of ctx.previous) qc.setQueryData(key, data);
+      toast(w(lang, "tSaveErr"));
+    },
+    onSettled: () => void invalidate(),
   });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: ExpenseUpdateInput }) =>
