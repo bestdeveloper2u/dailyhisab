@@ -266,6 +266,9 @@ export const W = {
     restoreDone: "ফিরিয়ে আনা হয়েছে ✓",
     restoreErr: "ফিরিয়ে আনা যায়নি — সঠিক ব্যাকআপ ফাইল কি না দেখুন",
     restoreBadFile: "এই ফাইলটি Daily Hisab ব্যাকআপ নয়",
+    // offline outbox (T23.1 — ADR-0022); offlineFlushed carries an {n} count slot
+    offlineQueued: "অফলাইনে আছেন — খরচটি ডিভাইসে জমা হয়েছে, ইন্টারনেট এলে যোগ হবে",
+    offlineFlushed: "{n} টি অফলাইন খরচ যোগ হয়েছে",
   },
   en: {
     searchPh: "Search — category, note…",
@@ -526,6 +529,9 @@ export const W = {
     restoreDone: "Restored ✓",
     restoreErr: "Could not restore — check that the file is a valid backup",
     restoreBadFile: "This file is not a Daily Hisab backup",
+    // offline outbox (T23.1 — ADR-0022); offlineFlushed carries an {n} count slot
+    offlineQueued: "You're offline — the expense is saved on this device and will be added when you reconnect",
+    offlineFlushed: "{n} offline expenses added",
   },
 } as const;
 

@@ -46,6 +46,13 @@ import {
 import { useLangStore } from "../store/lang";
 import { toast } from "../lib/toast";
 import { w } from "../lib/web-i18n";
+import {
+  enqueueOutbox,
+  flushOutboxWithUi,
+  OfflineQueuedError,
+  shouldQueueOffline,
+  toOutboxItem,
+} from "./outbox";
 
 export interface ExpenseFilters {
   q?: string;
@@ -141,9 +148,20 @@ export function useExpenseMutations() {
   // the server rejects it. Edit/delete stay non-optimistic.
   const create = useMutation({
     mutationFn: async (body: ExpenseCreateInput) => {
-      const res = await apiCreateExpense(body, lang);
-      if (!res.ok) throw new Error(res.detail || w(lang, "errFallback"));
-      return res;
+      try {
+        const res = await apiCreateExpense(body, lang);
+        if (!res.ok) throw new Error(res.detail || w(lang, "errFallback"));
+        return res;
+      } catch (err) {
+        // T23.1 (ADR-0022): offline (or transport-dead) creates are queued
+        // on-device and flushed on reconnect instead of being lost. The
+        // thrown OfflineQueuedError reroutes onError to the "queued" toast.
+        if (shouldQueueOffline(err)) {
+          await enqueueOutbox(toOutboxItem(body));
+          throw new OfflineQueuedError();
+        }
+        throw err;
+      }
     },
     onMutate: async (body: ExpenseCreateInput) => {
       await qc.cancelQueries({ queryKey: ["expenses"] });
@@ -176,9 +194,16 @@ export function useExpenseMutations() {
       });
       return { previous };
     },
-    onError: (_err, _body, ctx) => {
+    onSuccess: () => {
+      // Cheap outbox attempt after every real save (no-op when empty).
+      void flushOutboxWithUi(qc, lang);
+    },
+    onError: (err, _body, ctx) => {
       if (ctx) for (const [key, data] of ctx.previous) qc.setQueryData(key, data);
-      toast(w(lang, "tSaveErr"));
+      // Offline-queued is not a save failure: roll the optimistic row back
+      // (it returns with a real id after the flush invalidation) and say so.
+      if (err instanceof OfflineQueuedError) toast(w(lang, "offlineQueued"));
+      else toast(w(lang, "tSaveErr"));
     },
     onSettled: () => void invalidate(),
   });
@@ -199,8 +224,26 @@ export function useExpenseMutations() {
     onSuccess: () => void invalidate(),
   });
   const bulkCreate = useMutation({
-    mutationFn: (items: ExpenseCreateInput[]) => apiBulkCreateExpenses(items, lang),
-    onSuccess: () => void invalidate(),
+    mutationFn: async (items: ExpenseCreateInput[]) => {
+      try {
+        return await apiBulkCreateExpenses(items, lang);
+      } catch (err) {
+        // T23.1 (ADR-0022): same offline detection as the single create —
+        // each item queued individually, one shared "queued" toast.
+        if (shouldQueueOffline(err)) {
+          for (const item of items) await enqueueOutbox(toOutboxItem(item));
+          throw new OfflineQueuedError();
+        }
+        throw err;
+      }
+    },
+    onError: (err) => {
+      if (err instanceof OfflineQueuedError) toast(w(lang, "offlineQueued"));
+    },
+    onSuccess: () => {
+      void invalidate();
+      void flushOutboxWithUi(qc, lang);
+    },
   });
 
   return { create, update, remove, bulkCreate };

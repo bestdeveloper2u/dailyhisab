@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { AppShell } from "./components/AppShell";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { OutboxAutoFlush } from "./lib/outbox";
 import { RecurringAutoRun } from "./lib/recurringRun";
 import { useAuthStore } from "./store/auth";
 
@@ -80,9 +81,13 @@ function RequireAuth() {
   // T17.1 (ADR-0014 §3): authed tree host for the once-per-local-day
   // recurring boot run. Renders nothing and never blocks the UI — the
   // POST is fire-and-forget inside the effect below <Outlet/>.
+  // T23.1 (ADR-0022): the offline outbox flusher shares this mount point —
+  // it only runs with a live session. The component also registers
+  // Background Sync (best-effort, Chromium-only) inside its effect.
   return (
     <>
       <RecurringAutoRun />
+      <OutboxAutoFlush />
       <Outlet />
     </>
   );
