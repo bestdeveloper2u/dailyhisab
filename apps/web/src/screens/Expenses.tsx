@@ -1,6 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { useSearchParams } from "react-router";
-import { moneyToNumber, t, toBnDigits } from "@khoroch/core";
+import { useWindowVirtualizer, measureElement as defaultMeasureElement } from "@tanstack/react-virtual";
+import { moneyToNumber, t, toBnDigits, type Lang } from "@khoroch/core";
 import type { Expense, ExpenseCreateInput } from "@khoroch/api-client";
 import { useExpensesInfinite, useExpenseMutations } from "../lib/queries";
 import {
@@ -36,6 +44,22 @@ import {
 /** How many month chips to offer either side of the current month. */
 const MONTH_WINDOW = 6;
 
+/**
+ * T25.1 threshold-gated virtualization (TanStack Virtual v3,
+ * https://tanstack.com/virtual/latest/docs/introduction). At or below this
+ * many loaded rows the plain .map render stays byte-identical to the legacy
+ * DOM (cheaper than virtualizer bookkeeping, and existing axe/playwright
+ * snapshots see exactly the old tree); above it, the same header/row markup
+ * renders through a window virtualizer so a 1,000+ row CSV import never
+ * produces thousands of DOM nodes.
+ */
+const VIRTUAL_THRESHOLD = 60;
+/** estimateSize seeds: day header ~44px, expense row ~56px (measureElement
+ * corrects both to real layout heights as items mount). */
+const HEADER_ESTIMATE_PX = 44;
+const ROW_ESTIMATE_PX = 56;
+const OVERSCAN = 8;
+
 function monthChips(today: string): string[] {
   const thisYm = ymOfIso(today);
   return Array.from({ length: MONTH_WINDOW * 2 + 1 }, (_, i) =>
@@ -48,6 +72,16 @@ interface DayGroup {
   rows: Expense[];
   sum: number;
 }
+
+/**
+ * Flat render-order entry feeding the virtualizer (T25.1): one header item
+ * per day group followed by one item per expense row. Built from the
+ * already-filtered `rows` (q + month chips are query params on
+ * useExpensesInfinite), so the virtualized window never bypasses filtering.
+ */
+type ListEntry =
+  | { kind: "header"; group: DayGroup }
+  | { kind: "row"; row: Expense };
 
 function groupByDay(rows: Expense[]): DayGroup[] {
   const groups: DayGroup[] = [];
@@ -116,6 +150,65 @@ function DeleteButton({ expense }: { expense: Expense }) {
     >
       <IconTrash className="h-4 w-4" />
     </button>
+  );
+}
+
+/** Day-group header: label + presentation-only per-day sum (ADR-0004 §1).
+ * Shared verbatim by the legacy and virtualized render paths. */
+function DayGroupHeader({
+  group,
+  lang,
+  today,
+}: {
+  group: DayGroup;
+  lang: Lang;
+  today: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between px-1 py-1.5 text-[13px]">
+      <span className="font-bold">
+        {group.iso === today ? w(lang, "today") : dayLabel(group.iso, lang)}
+      </span>
+      <span className="font-semibold tabular-nums text-muted">
+        {fmtTaka(group.sum, lang)}
+      </span>
+    </div>
+  );
+}
+
+/** One expense row — identical markup/affordances (edit, single-tap delete)
+ * in both render paths, so test queries (role/aria-label/text) are stable. */
+function ExpenseRow({
+  row,
+  lang,
+  onEdit,
+}: {
+  row: Expense;
+  lang: Lang;
+  onEdit: (row: Expense) => void;
+}) {
+  return (
+    <li className="flex items-center gap-3 px-3.5 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">{row.cat}</p>
+        <p className="truncate text-xs text-muted">
+          {groupName(row.grp, lang)} · {payName(row.pay, lang)}
+          {row.desc ? ` · ${row.desc}` : ""}
+        </p>
+      </div>
+      <span className="text-sm font-bold tabular-nums text-ink">
+        {fmtTaka(row.amt, lang)}
+      </span>
+      <button
+        type="button"
+        aria-label={`${row.cat} — ${w(lang, "edit")}`}
+        onClick={() => onEdit(row)}
+        className="rounded-control p-2 text-muted hover:bg-surface-2 hover:text-ink"
+      >
+        <IconPencil className="h-4 w-4" />
+      </button>
+      <DeleteButton expense={row} />
+    </li>
   );
 }
 
@@ -198,6 +291,59 @@ export function Expenses() {
   const dayGroups = useMemo(() => groupByDay(rows), [rows]);
   const chips = useMemo(() => monthChips(todayIso()), []);
   const today = todayIso();
+
+  // T25.1: gate on TOTAL loaded rows (all pages), not per page — the point
+  // is bounding DOM nodes for the whole screen.
+  const virtualEnabled = rows.length > VIRTUAL_THRESHOLD;
+
+  /** Flat header/row items in render order (see ListEntry). */
+  const listEntries = useMemo<ListEntry[]>(() => {
+    const entries: ListEntry[] = [];
+    for (const group of dayGroups) {
+      entries.push({ kind: "header", group });
+      for (const row of group.rows) entries.push({ kind: "row", row });
+    }
+    return entries;
+  }, [dayGroups]);
+
+  const listRef = useRef<HTMLDivElement | null>(null);
+  // Distance from page top to the list (official window-scroller pattern):
+  // measured after mount; 0 on first paint is fine, the virtualizer
+  // re-reads options on the next render pass.
+  const listOffsetRef = useRef(0);
+  useLayoutEffect(() => {
+    listOffsetRef.current = listRef.current?.offsetTop ?? 0;
+  }, []);
+
+  // Hook runs unconditionally (count 0 = inert) so hook order is stable
+  // across the threshold switch.
+  const virtualizer = useWindowVirtualizer({
+    count: virtualEnabled ? listEntries.length : 0,
+    estimateSize: (i) =>
+      listEntries[i]?.kind === "header" ? HEADER_ESTIMATE_PX : ROW_ESTIMATE_PX,
+    overscan: OVERSCAN,
+    scrollMargin: listOffsetRef.current,
+    // measureElement keeps variable heights honest, EXCEPT when the element
+    // reports no layout at all (jsdom/tests: offsetHeight 0) — then the
+    // estimate stands instead of collapsing the item to 0px.
+    measureElement: (element, entry, instance) => {
+      const measured = defaultMeasureElement(element, entry, instance);
+      return measured > 0
+        ? measured
+        : instance.options.estimateSize(instance.indexFromElement(element));
+    },
+    getItemKey: (i) => {
+      const entry = listEntries[i];
+      return entry?.kind === "header"
+        ? `day:${entry.group.iso}`
+        : `row:${entry?.row.id ?? i}`;
+    },
+  });
+
+  function openEdit(row: Expense) {
+    setEditTarget(row);
+    setFormOpen(true);
+  }
 
   const error = query.isError ? query.error : null;
 
@@ -401,48 +547,65 @@ export function Expenses() {
         </div>
       )}
 
-      <div className="mt-3 flex flex-col gap-4">
-        {dayGroups.map((group) => (
-          <div key={group.iso}>
-            <div className="flex items-baseline justify-between px-1 py-1.5 text-[13px]">
-              <span className="font-bold">
-                {group.iso === today ? w(lang, "today") : dayLabel(group.iso, lang)}
-              </span>
-              <span className="font-semibold tabular-nums text-muted">
-                {fmtTaka(group.sum, lang)}
-              </span>
-            </div>
-            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-card">
-              {group.rows.map((row) => (
-                <li key={row.id} className="flex items-center gap-3 px-3.5 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{row.cat}</p>
-                    <p className="truncate text-xs text-muted">
-                      {groupName(row.grp, lang)} · {payName(row.pay, lang)}
-                      {row.desc ? ` · ${row.desc}` : ""}
-                    </p>
-                  </div>
-                  <span className="text-sm font-bold tabular-nums text-ink">
-                    {fmtTaka(row.amt, lang)}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={`${row.cat} — ${w(lang, "edit")}`}
-                    onClick={() => {
-                      setEditTarget(row);
-                      setFormOpen(true);
-                    }}
-                    className="rounded-control p-2 text-muted hover:bg-surface-2 hover:text-ink"
-                  >
-                    <IconPencil className="h-4 w-4" />
-                  </button>
-                  <DeleteButton expense={row} />
-                </li>
-              ))}
-            </ul>
+      {/*
+        T25.1 threshold gate. Legacy path (rows <= VIRTUAL_THRESHOLD) is the
+        exact pre-virtualization DOM. Virtual path (rows > threshold) renders
+        the SAME DayGroupHeader/ExpenseRow markup as absolutely-positioned
+        items inside a total-size spacer — the page (window) is the scroller
+        (AppShell <main> has no overflow of its own), so this is
+        useWindowVirtualizer and item starts are document coordinates minus
+        the list's page offset (scrollMargin — official window-scroller
+        pattern: tanstack.com/virtual latest docs, window example).
+      */}
+      {virtualEnabled ? (
+        <div ref={listRef} data-virtualized="true" className="mt-3">
+          <div
+            className="relative w-full"
+            style={{ height: virtualizer.getTotalSize() }}
+          >
+            {virtualizer.getVirtualItems().map((vi) => {
+              const entry = listEntries[vi.index];
+              if (!entry) return null;
+              return (
+                <div
+                  key={vi.key}
+                  data-index={vi.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute inset-x-0 top-0"
+                  style={{
+                    transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+                  }}
+                >
+                  {entry.kind === "header" ? (
+                    <DayGroupHeader group={entry.group} lang={lang} today={today} />
+                  ) : (
+                    <ul className="mb-1 flex flex-col divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-card">
+                      <ExpenseRow
+                        row={entry.row}
+                        lang={lang}
+                        onEdit={openEdit}
+                      />
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-col gap-4">
+          {dayGroups.map((group) => (
+            <div key={group.iso}>
+              <DayGroupHeader group={group} lang={lang} today={today} />
+              <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-card border border-line bg-surface shadow-card">
+                {group.rows.map((row) => (
+                  <ExpenseRow key={row.id} row={row} lang={lang} onEdit={openEdit} />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
 
       {query.hasNextPage && (
         <div className="mt-4 flex justify-center">
