@@ -27,6 +27,9 @@ const Login = lazy(() =>
 const Month = lazy(() =>
   import("./screens/Month").then((m) => ({ default: m.Month })),
 );
+const Recurring = lazy(() =>
+  import("./screens/Recurring").then((m) => ({ default: m.Recurring })),
+);
 const Report = lazy(() =>
   import("./screens/Report").then((m) => ({ default: m.Report })),
 );
@@ -95,6 +98,7 @@ export default function App() {
               <Route path="/month" element={<Month />} />
               <Route path="/report" element={<Report />} />
               <Route path="/debts" element={<Debts />} />
+              <Route path="/recurring" element={<Recurring />} />
               <Route path="/budget" element={<Budget />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

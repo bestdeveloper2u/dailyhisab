@@ -121,6 +121,38 @@ export function IconTrash(props: IconProps) {
   );
 }
 
+/** Recurring (T16.4): circular refresh arrows — a schedule that repeats. */
+export function IconRepeat(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M17 2.5 20.5 6 17 9.5" />
+      <path d="M20.5 6H7A3.5 3.5 0 0 0 3.5 9.5V11" />
+      <path d="M7 21.5 3.5 18 7 14.5" />
+      <path d="M3.5 18h13.5a3.5 3.5 0 0 0 3.5-3.5V13" />
+    </Svg>
+  );
+}
+
+/** Run-now trigger for the recurring scheduler. */
+export function IconPlay(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7.5 4.5v15L19 12Z" />
+    </Svg>
+  );
+}
+
+/** Backup restore upload (T16.4 — ADR-0012). */
+export function IconUpload(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 15V4" />
+      <path d="m7.5 8.5 4.5-4.5 4.5 4.5" />
+      <path d="M4 20h16" />
+    </Svg>
+  );
+}
+
 export function IconSearch(props: IconProps) {
   return (
     <Svg {...props}>

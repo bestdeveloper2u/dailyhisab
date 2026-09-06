@@ -7,6 +7,7 @@ import {
   PAY_ORDER,
 } from "../lib/catalog";
 import { LangToggle } from "../components/LangToggle";
+import { DataSafety } from "../components/DataSafety";
 import { Segmented } from "../components/Segmented";
 import { useAuthStore } from "../store/auth";
 import { useLangStore } from "../store/lang";
@@ -107,14 +108,9 @@ export function Settings() {
             </Row>
           </Card>
 
-          {/* ডেটা ও ব্যাকআপ — honest version of the prototype sheet card */}
-          <Card title={w(lang, "dataBackup")}>
-            <Row label={w(lang, "dataBackupSub")}>
-              <span className="rounded-full bg-emerald-soft px-2.5 py-1 text-[12.5px] font-semibold text-emerald">
-                {w(lang, "on")} ✓
-              </span>
-            </Row>
-          </Card>
+          {/* ডেটা নিরাপত্তা — real backup download + restore (ADR-0012, T16.4);
+              supersedes the prototype's sheet-sync/"auto backup" row (ADR-0015). */}
+          <DataSafety />
         </div>
 
         <div className="flex flex-col gap-4">

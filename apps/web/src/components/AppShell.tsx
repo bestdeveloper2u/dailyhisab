@@ -1,7 +1,8 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useEffect, useRef } from "react";
-import { t } from "@khoroch/core";
+import { t, type Lang } from "@khoroch/core";
 import { useLangStore } from "../store/lang";
+import { w } from "../lib/web-i18n";
 import { LangToggle } from "./LangToggle";
 import { Logo } from "./Logo";
 import { ToastHost } from "./Toast";
@@ -12,19 +13,26 @@ import {
   IconHome,
   IconPlus,
   IconReceipt,
+  IconRepeat,
   IconSliders,
   IconSwap,
   IconWallet,
 } from "./icons";
 
+/*
+ * Sidebar/tab destinations. Labels resolve per render (t for the core dict,
+ * w for web-local keys) — navRecurring lives in web-i18n until it graduates
+ * into @khoroch/core alongside the others.
+ */
 const NAV = [
-  { to: "/", key: "navDashboard", end: true, Icon: IconHome },
-  { to: "/expenses", key: "navExpenses", end: false, Icon: IconReceipt },
-  { to: "/month", key: "navMonthly", end: false, Icon: IconCalendar },
-  { to: "/report", key: "navReport", end: false, Icon: IconBarChart },
-  { to: "/debts", key: "navDebts", end: false, Icon: IconSwap },
-  { to: "/budget", key: "navBudget", end: false, Icon: IconWallet },
-  { to: "/settings", key: "navSettings", end: false, Icon: IconSliders },
+  { to: "/", end: true, Icon: IconHome, label: (l: Lang) => t(l, "navDashboard") },
+  { to: "/expenses", end: false, Icon: IconReceipt, label: (l: Lang) => t(l, "navExpenses") },
+  { to: "/month", end: false, Icon: IconCalendar, label: (l: Lang) => t(l, "navMonthly") },
+  { to: "/report", end: false, Icon: IconBarChart, label: (l: Lang) => t(l, "navReport") },
+  { to: "/debts", end: false, Icon: IconSwap, label: (l: Lang) => t(l, "navDebts") },
+  { to: "/recurring", end: false, Icon: IconRepeat, label: (l: Lang) => w(l, "navRecurring") },
+  { to: "/budget", end: false, Icon: IconWallet, label: (l: Lang) => t(l, "navBudget") },
+  { to: "/settings", end: false, Icon: IconSliders, label: (l: Lang) => t(l, "navSettings") },
 ] as const;
 
 /**
@@ -95,7 +103,7 @@ export function AppShell() {
               <IconPlus className="h-[19px] w-[19px] shrink-0" />
               {t(lang, "addExpense")}
             </button>
-            {NAV.map(({ to, key, end, Icon }) => (
+            {NAV.map(({ to, end, Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -107,7 +115,7 @@ export function AppShell() {
                 }
               >
                 <Icon className="h-[19px] w-[19px] shrink-0" />
-                {t(lang, key)}
+                {label(lang)}
               </NavLink>
             ))}
           </nav>
@@ -136,16 +144,16 @@ export function AppShell() {
         aria-label="Tabs"
         className="pb-safe fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-surface lg:hidden"
       >
-        {/* All 7 NAV items fit <1024px by going icon-only: 360px / 7 ≈ 51px per
+        {/* All 8 NAV items fit <1024px by going icon-only: 360px / 8 ≈ 45px per
             tab, each ≥44px tall (WCAG 2.2 target size); labels live in the
             accessible name (aria-label) + title tooltip. */}
-        {NAV.map(({ to, key, end, Icon }) => (
+        {NAV.map(({ to, end, Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
-            aria-label={t(lang, key)}
-            title={t(lang, key)}
+            aria-label={label(lang)}
+            title={label(lang)}
             className={({ isActive }) =>
               `flex min-h-11 min-w-0 flex-1 items-center justify-center ${
                 isActive ? "text-emerald" : "text-muted"
