@@ -60,3 +60,33 @@ class RefreshIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     refresh_token: str = Field(alias="refreshToken", min_length=16, max_length=512)
+
+
+class SessionItemOut(BaseModel):
+    """One live session of the caller (GET /auth/sessions item).
+
+    ``expires_in`` is the remaining KV TTL of ``sess:<id>`` in seconds —
+    the same lifetime the refresh token has left.
+    """
+
+    id: str
+    expires_in: int
+
+
+class SessionsOut(BaseModel):
+    """GET /auth/sessions response: the caller's live sessions.
+
+    ``current`` is the session id embedded in the caller's own access token
+    (``sid`` claim, ADR-0002). ``null`` means the token carried no ``sid``
+    claim, so the current session cannot be pinpointed (revoke-others will
+    refuse with 409 in that case).
+    """
+
+    items: list[SessionItemOut]
+    current: str | None
+
+
+class RevokeOthersOut(BaseModel):
+    """POST /auth/sessions/revoke-others response."""
+
+    revoked: int
