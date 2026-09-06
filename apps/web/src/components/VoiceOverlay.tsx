@@ -163,6 +163,9 @@ export function VoiceOverlay({
    * [open, initialText] deps although it calls per-render closures.
    */
   const prefillDoneRef = useRef(false);
+  // T23.2 CTO fix: set while the current open session came from a share-target
+  // prefill — runFlow must then always park at review (never auto-save).
+  const fromShareRef = useRef(false);
   const setTextBothRef = useRef(setTextBoth);
   const runFlowRef = useRef(runFlow);
   useEffect(() => {
@@ -172,12 +175,14 @@ export function VoiceOverlay({
   useEffect(() => {
     if (!open) {
       prefillDoneRef.current = false;
+      fromShareRef.current = false;
       return;
     }
     if (prefillDoneRef.current) return;
     prefillDoneRef.current = true;
     const shared = (initialText ?? "").trim();
     if (!shared || textRef.current.trim() !== "") return;
+    fromShareRef.current = true;
     setTextBothRef.current(shared);
     void runFlowRef.current();
   }, [open, initialText]);
@@ -388,7 +393,11 @@ export function VoiceOverlay({
         setItems([]); // "কিছু বোঝা যায়নি" — transcript stays for editing
         return;
       }
-      if (res.data.confidence >= AUTO_SAVE_CONFIDENCE) {
+      // T23.2 CTO fix: share-target intake NEVER auto-saves, however
+      // confident the parse — the shared text may be accidental or wrong,
+      // so the review step is mandatory (dictation keeps its high-confidence
+      // auto-save: the speaker just said it out loud).
+      if (!fromShareRef.current && res.data.confidence >= AUTO_SAVE_CONFIDENCE) {
         const saved = await saveItems(res.data.items);
         if (saved) {
           // Prototype vpDone: brief ✓ then the overlay closes itself.

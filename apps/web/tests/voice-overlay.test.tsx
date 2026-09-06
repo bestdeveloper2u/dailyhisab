@@ -351,6 +351,33 @@ describe("VoiceOverlay initialText (T23.2 share-target prefill)", () => {
     expect(parseBodies).toHaveLength(1);
   });
 
+  it("CTO fix: HIGH-confidence share parse still parks at review — never auto-saves", async () => {
+    const parseBodies: unknown[] = [];
+    const bulkBodies: unknown[] = [];
+    stubFetch(
+      voiceHandler({
+        parseResult: {
+          items: [{ amt: "40", cat: "চা", grp: "food", pay: null, iso: null, desc: null }],
+          confidence: 0.99,
+        },
+        onParse: (b) => parseBodies.push(b),
+        onBulk: (b) => bulkBodies.push(b),
+      }),
+    );
+    renderOverlay(<VoiceOverlay open initialText="চায়ে ৪০ টাকা" onClose={() => {}} />);
+
+    await waitFor(() => expect(parseBodies).toEqual([{ text: "চায়ে ৪০ টাকা" }]));
+    // confidence 0.99 ≥ AUTO_SAVE_CONFIDENCE — live dictation auto-saves here;
+    // share-target intake MUST park at the review step instead (the shared
+    // text may be accidental — the user confirms, nothing is saved blind).
+    expect(await screen.findByText("পাওয়া খরচ")).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(bulkBodies).toEqual([]);
+    expect(screen.getByRole("textbox", { name: "যা বলতে চান তা লিখুন — বা মাইকে চেপে বলুন" })).toHaveValue(
+      "চায়ে ৪০ টাকা",
+    );
+  });
+
   it("no initialText → no prefill and no auto-parse (behavior unchanged)", async () => {
     const parseBodies: unknown[] = [];
     stubFetch(
